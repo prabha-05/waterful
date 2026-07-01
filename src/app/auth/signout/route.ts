@@ -5,7 +5,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL("/login", request.url), {
-    status: 303,
-  });
+
+  // Behind a proxy, request.url is the internal host — rebuild the public origin.
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+  const origin = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : new URL(request.url).origin;
+
+  return NextResponse.redirect(`${origin}/login`, { status: 303 });
 }
