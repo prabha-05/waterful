@@ -5,9 +5,9 @@
 # `--include=dev` on the build installs devDependencies (typescript, tailwind,
 # tsx) which Render otherwise prunes — the Next build and the worker's tsx need them.
 services:
-  # 1) Web app (Next.js) — URL: https://waterful.onrender.com
+  # 1) Web app (Next.js) — URL: https://waterful-web.onrender.com
   - type: web
-    name: waterful
+    name: waterful-web
     runtime: node
     plan: starter
     buildCommand: npm ci --include=dev && npm run build
