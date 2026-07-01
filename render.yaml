@@ -15,18 +15,21 @@ services:
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
     envVars:
+      # Public values (already exposed in the browser bundle) — inlined so a
+      # redeploy/recreate only needs the 2 real secrets below.
       - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
+        value: https://exymbycmnqunrdezytqg.supabase.co
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-        sync: false
+        value: sb_publishable_EF4uutwxRU9AhKoeqPlsrg_r3QAkD_x
+      - key: META_AD_ACCOUNT_ID
+        value: act_378691071012831
+      - key: META_GRAPH_VERSION
+        value: v21.0
+      # Secrets — entered in the Render dashboard, never committed.
       - key: DATABASE_URL
         sync: false
       - key: META_ACCESS_TOKEN
         sync: false
-      - key: META_AD_ACCOUNT_ID
-        sync: false
-      - key: META_GRAPH_VERSION
-        value: v21.0
 
   # 2) Meta sync — daily 06:00 cron (decisions §6: every day 6 AM, last 28 days).
   - type: cron
@@ -38,11 +41,11 @@ services:
     buildCommand: npm ci --include=dev
     startCommand: npm run worker:sync
     envVars:
+      - key: META_AD_ACCOUNT_ID
+        value: act_378691071012831
+      - key: META_GRAPH_VERSION
+        value: v21.0
       - key: DATABASE_URL
         sync: false
       - key: META_ACCESS_TOKEN
         sync: false
-      - key: META_AD_ACCOUNT_ID
-        sync: false
-      - key: META_GRAPH_VERSION
-        value: v21.0
