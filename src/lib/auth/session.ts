@@ -27,12 +27,42 @@ export type AppUser = {
  */
 export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  const email = user?.email?.toLowerCase();
-  if (!user || !email) return null;
+  // Resolve the identity from the JWT locally (getClaims verifies the token without
+  // a network round-trip — the proxy already refreshed the session). Fall back to
+  // getUser() only if claims aren't available.
+  let email: string | undefined;
+  let sub: string | undefined;
+  let fullName: string | undefined;
+
+  try {
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims as Record<string, unknown> | undefined;
+    if (claims?.email) {
+      email = String(claims.email).toLowerCase();
+      sub = typeof claims.sub === "string" ? claims.sub : undefined;
+      const meta = claims.user_metadata as Record<string, unknown> | undefined;
+      fullName = typeof meta?.full_name === "string" ? meta.full_name : undefined;
+    }
+  } catch {
+    // fall through to getUser
+  }
+
+  if (!email) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user?.email) {
+      email = user.email.toLowerCase();
+      sub =
+        (user.user_metadata?.sub as string | undefined) ??
+        (user.user_metadata?.provider_id as string | undefined) ??
+        user.id;
+      fullName = user.user_metadata?.full_name as string | undefined;
+    }
+  }
+
+  if (!email) return null;
 
   const [row] = await db
     .select({
@@ -60,7 +90,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   if (!row) {
     return {
       id: "",
-      name: user.user_metadata?.full_name ?? email,
+      name: fullName ?? email,
       email,
       role: null,
       permissions: NO_PERMISSIONS,
@@ -69,17 +99,8 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   }
 
   // Capture Google's stable identifier on first sight (decisions §3, best-effort).
-  if (!row.googleSub) {
-    const sub =
-      (user.user_metadata?.sub as string | undefined) ??
-      (user.user_metadata?.provider_id as string | undefined) ??
-      user.id;
-    if (sub) {
-      await db
-        .update(users)
-        .set({ googleSub: sub })
-        .where(eq(users.id, row.id));
-    }
+  if (!row.googleSub && sub) {
+    await db.update(users).set({ googleSub: sub }).where(eq(users.id, row.id));
   }
 
   const hasValidRole =

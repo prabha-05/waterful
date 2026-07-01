@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { sqlClient } from "@/lib/db";
 import { requirePermission } from "@/lib/auth/guard";
+import { clearTaxonomyCache } from "@/lib/data/taxonomy";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -26,6 +27,7 @@ async function guard(): Promise<ActionResult | null> {
 }
 
 function ok(): ActionResult {
+  clearTaxonomyCache(); // taxonomy changed — drop the in-memory cache
   revalidatePath("/master-data");
   return { ok: true };
 }

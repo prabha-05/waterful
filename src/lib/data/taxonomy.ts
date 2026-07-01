@@ -12,10 +12,30 @@ import {
 
 export type Option = { id: string; label: string };
 export type TypeWithSubs = Option & { subtypes: Option[] };
-export type Taxonomy = Awaited<ReturnType<typeof getTaxonomy>>;
+export type Taxonomy = Awaited<ReturnType<typeof loadTaxonomy>>;
 
-/** Full active taxonomy for the Upload/Edit forms and Library filters. */
-export async function getTaxonomy() {
+// Taxonomy changes only via Master Data. Cache it in memory (Render runs a
+// persistent Node process) so it isn't 7 DB round-trips on every page — big latency
+// win. Master Data actions call clearTaxonomyCache() so edits appear immediately.
+let taxonomyCache: { data: Taxonomy; at: number } | null = null;
+const TAXONOMY_TTL_MS = 60_000;
+
+export function clearTaxonomyCache() {
+  taxonomyCache = null;
+}
+
+/** Full active taxonomy for the Upload/Edit forms and Library filters (cached). */
+export async function getTaxonomy(): Promise<Taxonomy> {
+  const now = Date.now();
+  if (taxonomyCache && now - taxonomyCache.at < TAXONOMY_TTL_MS) {
+    return taxonomyCache.data;
+  }
+  const data = await loadTaxonomy();
+  taxonomyCache = { data, at: now };
+  return data;
+}
+
+async function loadTaxonomy() {
   const [angleRows, personaRows, typeRows, subtypeRows, awarenessRows, hookRows, mapRows] =
     await Promise.all([
       db.select().from(angles).where(isNull(angles.archivedAt)).orderBy(asc(angles.label)),
