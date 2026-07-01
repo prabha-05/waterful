@@ -6,9 +6,11 @@
 # tsx) which Render otherwise prunes — the Next build and the worker's tsx need them.
 services:
   # 1) Web app (Next.js) — URL: https://waterful-web.onrender.com
+  # region: singapore — closest to the Supabase DB (Mumbai, ap-south-1) to cut latency.
   - type: web
     name: waterful-web
     runtime: node
+    region: singapore
     plan: starter
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
@@ -30,6 +32,7 @@ services:
   - type: cron
     name: waterful-meta-sync
     runtime: node
+    region: singapore
     plan: starter
     schedule: "0 6 * * *"
     buildCommand: npm ci --include=dev
