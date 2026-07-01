@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
+import { timed } from "@/lib/perf";
 
 /**
  * Refresh the Supabase session on each request and expose the authenticated user.
@@ -36,7 +37,7 @@ export async function updateSession(request: NextRequest) {
   // meant a cross-region call to Supabase auth (Mumbai) per click, which stalls the
   // whole app when their auth service is slow. Claims are enough for the auth gate;
   // authorization (roles/permissions) is resolved in the (app) layout.
-  const { data } = await supabase.auth.getClaims();
+  const { data } = await timed("proxy.getClaims", () => supabase.auth.getClaims());
   const user = data?.claims ?? null;
 
   return { response, user };

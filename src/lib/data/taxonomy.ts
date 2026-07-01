@@ -1,5 +1,6 @@
 import { asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { timed } from "@/lib/perf";
 import {
   angles,
   anglePersonas,
@@ -30,7 +31,7 @@ export async function getTaxonomy(): Promise<Taxonomy> {
   if (taxonomyCache && now - taxonomyCache.at < TAXONOMY_TTL_MS) {
     return taxonomyCache.data;
   }
-  const data = await loadTaxonomy();
+  const data = await timed("taxonomy.load", loadTaxonomy);
   taxonomyCache = { data, at: now };
   return data;
 }

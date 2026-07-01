@@ -1,6 +1,7 @@
 import "server-only";
 import { sqlClient } from "@/lib/db";
 import { creativeScore } from "@/lib/score";
+import { timed } from "@/lib/perf";
 
 /** One row per creative with its tags + summed (additive) metrics (§6 G1). */
 export type DashCreative = {
@@ -37,7 +38,7 @@ export type DashboardData = {
 };
 
 export async function getDashboard(): Promise<DashboardData> {
-  const rows = await sqlClient`
+  const rows = await timed("getDashboard", () => sqlClient`
     select c.id, a.label as angle, t.label as type, st.label as subtype,
            coalesce(string_agg(distinct p.label, '||') filter (where p.label is not null), '') as personas,
            coalesce(m.spend, 0) as spend, coalesce(m.revenue, 0) as revenue,
@@ -57,7 +58,7 @@ export async function getDashboard(): Promise<DashboardData> {
     ) m on m.creative_id = c.id
     where c.status <> 'archived'
     group by c.id, a.label, t.label, st.label, m.spend, m.revenue, m.conversions
-  `;
+  `);
 
   const creatives: DashCreative[] = rows.map((r) => ({
     id: r.id as string,

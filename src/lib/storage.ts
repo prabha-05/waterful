@@ -1,5 +1,6 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { timed } from "@/lib/perf";
 
 const BUCKET = "creatives";
 const SIGN_TIMEOUT_MS = 6000;
@@ -22,12 +23,14 @@ export async function signPaths(
 
   try {
     const supabase = await createSupabaseServerClient();
-    const result = await Promise.race([
-      supabase.storage.from(BUCKET).createSignedUrls(clean, expiresIn),
-      new Promise<{ data: null }>((resolve) =>
-        setTimeout(() => resolve({ data: null }), SIGN_TIMEOUT_MS),
-      ),
-    ]);
+    const result = await timed(`signPaths(${clean.length})`, () =>
+      Promise.race([
+        supabase.storage.from(BUCKET).createSignedUrls(clean, expiresIn),
+        new Promise<{ data: null }>((resolve) =>
+          setTimeout(() => resolve({ data: null }), SIGN_TIMEOUT_MS),
+        ),
+      ]),
+    );
     for (const item of result.data ?? []) {
       if (item.path && item.signedUrl) map.set(item.path, item.signedUrl);
     }

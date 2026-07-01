@@ -1,6 +1,7 @@
 import "server-only";
 import { sqlClient } from "@/lib/db";
 import { creativeScore } from "@/lib/score";
+import { timed } from "@/lib/perf";
 import type { CreativeStatus } from "@/lib/status";
 
 export type CreativeCard = {
@@ -45,7 +46,7 @@ function toCard(r: Record<string, unknown>): CreativeCard {
 
 /** All creatives as Library cards. Additive metrics summed; score on read (§6/§7). */
 export async function listCreatives(): Promise<CreativeCard[]> {
-  const rows = await sqlClient`
+  const rows = await timed("listCreatives", () => sqlClient`
     select c.id, c.title, c.status, c.created_at,
            t.label as type, st.label as subtype, a.label as angle,
            coalesce(string_agg(distinct p.label, '||') filter (where p.label is not null), '') as personas,
@@ -66,7 +67,7 @@ export async function listCreatives(): Promise<CreativeCard[]> {
     ) m on m.creative_id = c.id
     group by c.id, t.label, st.label, a.label, m.spend, m.revenue
     order by c.created_at desc
-  `;
+  `);
   return rows.map((r) => toCard(r as Record<string, unknown>));
 }
 

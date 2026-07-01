@@ -7,6 +7,7 @@ import {
   type Permissions,
 } from "@/lib/auth/permissions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { timed } from "@/lib/perf";
 
 export type AppUser = {
   id: string;
@@ -36,7 +37,9 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   let fullName: string | undefined;
 
   try {
-    const { data } = await supabase.auth.getClaims();
+    const { data } = await timed("session.getClaims", () =>
+      supabase.auth.getClaims(),
+    );
     const claims = data?.claims as Record<string, unknown> | undefined;
     if (claims?.email) {
       email = String(claims.email).toLowerCase();
@@ -64,27 +67,29 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
 
   if (!email) return null;
 
-  const [row] = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      archivedAt: users.archivedAt,
-      googleSub: users.googleSub,
-      roleId: roles.id,
-      roleLabel: roles.label,
-      roleArchivedAt: roles.archivedAt,
-      permUpload: roles.permUpload,
-      permLink: roles.permLink,
-      permUnlink: roles.permUnlink,
-      permLog: roles.permLog,
-      permMaster: roles.permMaster,
-      permAccess: roles.permAccess,
-    })
-    .from(users)
-    .leftJoin(roles, eq(roles.id, users.roleId))
-    .where(eq(users.email, email))
-    .limit(1);
+  const [row] = await timed("session.userQuery", () =>
+    db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        archivedAt: users.archivedAt,
+        googleSub: users.googleSub,
+        roleId: roles.id,
+        roleLabel: roles.label,
+        roleArchivedAt: roles.archivedAt,
+        permUpload: roles.permUpload,
+        permLink: roles.permLink,
+        permUnlink: roles.permUnlink,
+        permLog: roles.permLog,
+        permMaster: roles.permMaster,
+        permAccess: roles.permAccess,
+      })
+      .from(users)
+      .leftJoin(roles, eq(roles.id, users.roleId))
+      .where(eq(users.email, email))
+      .limit(1),
+  );
 
   // Authenticated with Google but never admitted by an Admin — no row.
   if (!row) {
