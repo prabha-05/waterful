@@ -30,10 +30,14 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // IMPORTANT: getUser() revalidates the token with Supabase — do not trust getSession() here.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify the session locally from the JWT (getClaims validates the token's
+  // signature without a network round-trip, and still rotates the cookie when the
+  // token needs refreshing). This runs on EVERY navigation — using getUser() here
+  // meant a cross-region call to Supabase auth (Mumbai) per click, which stalls the
+  // whole app when their auth service is slow. Claims are enough for the auth gate;
+  // authorization (roles/permissions) is resolved in the (app) layout.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   return { response, user };
 }
