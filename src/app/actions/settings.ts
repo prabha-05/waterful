@@ -8,12 +8,14 @@ import {
   type Settings,
 } from "@/lib/settings";
 
-/** Persist per-user settings to a cookie (functional: number format + default landing). */
+/** Persist per-user settings to a cookie (number format, landing, theme, date format). */
 export async function saveSettings(settings: Settings): Promise<{ ok: boolean }> {
   await requireUser();
   const value = JSON.stringify({
     numberFormat: settings.numberFormat === "international" ? "international" : "indian",
     defaultLanding: settings.defaultLanding === "dashboard" ? "dashboard" : "library",
+    theme: settings.theme === "dark" ? "dark" : "light",
+    dateFormat: settings.dateFormat === "ymd" ? "ymd" : "dmy",
   } satisfies Settings);
 
   const store = await cookies();

@@ -51,6 +51,51 @@
   --radius-card: 16px;
   --radius-control: 9px;
   --radius-pill: 20px;
+
+  /* Form control border (flips in dark). */
+  --control-border: #e0e5ea;
+
+  color-scheme: light;
+}
+
+/* Dark theme — flip the base tokens; everything using them adapts (Settings toggle). */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0e131a;
+  --surface: #161d26;
+  --surface-2: #1d2732;
+  --surface-3: #232e3a;
+  --line: #2a3644;
+  --line-2: #232d38;
+  --line-3: #1f2833;
+
+  --brand: #3b8fdd;
+  --brand-deep: #79b4e8;
+  --brand-accent: #4a97dd;
+  --brand-chip: #17293d;
+
+  --ink: #e7ecf1;
+  --ink-2: #c3ccd6;
+  --ink-3: #98a3ae;
+  --muted: #6f7b88;
+  --muted-2: #5d6875;
+  --muted-3: #4f5a67;
+
+  --green: #3cc079;
+  --green-bg: #13301f;
+  --amber: #dda94a;
+  --amber-bg: #33280f;
+  --red: #e56b5f;
+  --red-bg: #331815;
+  --review: #e08a6a;
+  --awaiting: #e8965a;
+
+  --tint-video: #18263e;
+  --tint-video-2: #1f3050;
+  --tint-static: #123029;
+  --tint-carousel: #241a3a;
+
+  --control-border: #33414f;
 }
 
 @theme inline {

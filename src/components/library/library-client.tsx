@@ -75,7 +75,7 @@ export function LibraryClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search title, angle, persona, type…"
-          className="h-9 w-72 rounded-[var(--radius-control)] border border-[#e0e5ea] bg-surface px-3 text-sm outline-none focus:border-brand"
+          className="h-9 w-72 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-3 text-sm text-ink outline-none focus:border-brand"
         />
         <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 w-36">
           <option value="recent">Recent</option>

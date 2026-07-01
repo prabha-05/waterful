@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { MetaSyncData } from "@/lib/data/meta-sync";
 import { triggerRebuild, triggerSync } from "@/app/actions/meta-sync";
-import { formatDate } from "@/lib/format";
 import { Button, Chip } from "@/components/ui/primitives";
+import { useDate } from "@/components/providers/settings-provider";
 
 const STATUS_CLASS: Record<string, string> = {
   success: "text-green bg-green-bg",
@@ -15,6 +15,7 @@ const STATUS_CLASS: Record<string, string> = {
 
 export function MetaSyncClient({ data }: { data: MetaSyncData }) {
   const router = useRouter();
+  const fmtDate = useDate();
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
@@ -44,7 +45,7 @@ export function MetaSyncClient({ data }: { data: MetaSyncData }) {
         <p className="mb-4 text-sm text-ink-3">Every day at 6:00 AM · last 28 days · every linked ad.</p>
         <div className="grid grid-cols-3 gap-3">
           <Tile label="Ads tracked" value={String(data.adsTracked)} />
-          <Tile label="Last sync" value={data.lastSync ? `${formatDate(data.lastSync.at)} · ${data.lastSync.kind}` : "—"} />
+          <Tile label="Last sync" value={data.lastSync ? `${fmtDate(data.lastSync.at)} · ${data.lastSync.kind}` : "—"} />
           <Tile label="Next run" value="Tomorrow 6:00 AM" />
         </div>
       </div>
@@ -91,7 +92,7 @@ export function MetaSyncClient({ data }: { data: MetaSyncData }) {
             {data.runs.map((r) => (
               <div key={r.id} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2 px-4 py-2 text-sm">
                 <span className="capitalize text-ink-2">{r.kind} · {r.window === "28d" ? "Last 28 days" : "Full history"}</span>
-                <span className="text-muted">{formatDate(r.startedAt)}</span>
+                <span className="text-muted">{fmtDate(r.startedAt)}</span>
                 <span className="text-muted">{r.adsCount} ads{r.triggeredBy ? ` · ${r.triggeredBy}` : ""}</span>
                 <Chip className={STATUS_CLASS[r.status] ?? "bg-surface-2 text-ink-3"}>{r.status}</Chip>
               </div>

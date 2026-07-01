@@ -21,7 +21,12 @@ export default async function AppLayout({
 
   return (
     <SettingsProvider
-      initial={{ numberFormat: settings.numberFormat, defaultLanding: settings.defaultLanding }}
+      initial={{
+        numberFormat: settings.numberFormat,
+        defaultLanding: settings.defaultLanding,
+        theme: settings.theme,
+        dateFormat: settings.dateFormat,
+      }}
     >
       <div className="flex h-screen overflow-hidden">
         <Sidebar

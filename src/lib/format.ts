@@ -38,12 +38,14 @@ export function formatInt(n: number): string {
   return new Intl.NumberFormat("en-IN").format(Math.round(n));
 }
 
-/** Static date display (e.g. "27 Jun 2026"), matching the design's date strings. */
-export function formatDate(d: Date | string): string {
+export type DateFormatMode = "dmy" | "ymd";
+
+/** Date display honoring the user's format setting (DD-MM-YYYY vs YYYY-MM-DD). */
+export function formatDate(d: Date | string, mode: DateFormatMode = "dmy"): string {
   const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  if (isNaN(date.getTime())) return "—";
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  return mode === "ymd" ? `${yyyy}-${mm}-${dd}` : `${dd}-${mm}-${yyyy}`;
 }

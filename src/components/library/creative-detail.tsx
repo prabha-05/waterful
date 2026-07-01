@@ -7,8 +7,8 @@ import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
 import type { CreativeStatus } from "@/lib/status";
 import { creativeScore } from "@/lib/score";
-import { formatDate, formatRoas } from "@/lib/format";
-import { useFormat } from "@/components/providers/settings-provider";
+import { formatRoas } from "@/lib/format";
+import { useDate, useFormat } from "@/components/providers/settings-provider";
 import { editTags, linkAd, setArchived, unlinkAd } from "@/app/actions/creatives";
 import {
   Button,
@@ -37,6 +37,7 @@ export function CreativeDetail({
 }) {
   const router = useRouter();
   const fmt = useFormat();
+  const fmtDate = useDate();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -94,7 +95,7 @@ export function CreativeDetail({
             </div>
             <h2 className="text-lg font-bold text-ink">{detail.title}</h2>
             <p className="text-xs text-muted">
-              Uploaded by {detail.uploadedBy} · {formatDate(detail.createdAt)}
+              Uploaded by {detail.uploadedBy} · {fmtDate(detail.createdAt)}
             </p>
             {perms.upload && (
               <div className="mt-3 flex gap-2">

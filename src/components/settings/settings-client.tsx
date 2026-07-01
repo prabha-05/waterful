@@ -6,15 +6,29 @@ import { useSettings } from "@/components/providers/settings-provider";
 import { saveSettings } from "@/app/actions/settings";
 import { cn } from "@/lib/utils";
 
+type Landing = "library" | "dashboard";
+type Theme = "light" | "dark";
+type DateFmt = "dmy" | "ymd";
+
 export function SettingsClient() {
-  const { numberFormat, defaultLanding, setNumberFormat, setDefaultLanding } = useSettings();
+  const {
+    numberFormat, defaultLanding, theme, dateFormat,
+    setNumberFormat, setDefaultLanding, setTheme, setDateFormat,
+  } = useSettings();
   const [, startTransition] = useTransition();
 
-  const persist = (next: { numberFormat?: NumberFormat; defaultLanding?: "library" | "dashboard" }) =>
+  const persist = (next: {
+    numberFormat?: NumberFormat;
+    defaultLanding?: Landing;
+    theme?: Theme;
+    dateFormat?: DateFmt;
+  }) =>
     startTransition(() =>
       void saveSettings({
         numberFormat: next.numberFormat ?? numberFormat,
         defaultLanding: next.defaultLanding ?? defaultLanding,
+        theme: next.theme ?? theme,
+        dateFormat: next.dateFormat ?? dateFormat,
       }),
     );
 
@@ -54,17 +68,27 @@ export function SettingsClient() {
         />
       </Setting>
 
-      {/* Theme — stubbed */}
-      <Setting title="Theme" desc="Light / Dark appearance.">
-        <Toggle options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} value="light" disabled />
+      {/* Theme — functional (dark mode) */}
+      <Setting title="Theme" desc="Light / Dark appearance." functional>
+        <Toggle
+          options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]}
+          value={theme}
+          onChange={(v) => {
+            setTheme(v as Theme); // live
+            persist({ theme: v as Theme });
+          }}
+        />
       </Setting>
 
-      {/* Date format — stubbed */}
-      <Setting title="Date format" desc="How dates are displayed.">
+      {/* Date format — functional */}
+      <Setting title="Date format" desc="How dates are displayed." functional>
         <Toggle
           options={[{ value: "dmy", label: "DD-MM-YYYY" }, { value: "ymd", label: "YYYY-MM-DD" }]}
-          value="dmy"
-          disabled
+          value={dateFormat}
+          onChange={(v) => {
+            setDateFormat(v as DateFmt); // live
+            persist({ dateFormat: v as DateFmt });
+          }}
         />
       </Setting>
     </div>

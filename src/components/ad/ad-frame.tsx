@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import type { AdFrameData } from "@/lib/data/creatives";
 import type { Permissions } from "@/lib/auth/permissions";
 import { lifetimeDerived, recommendation } from "@/lib/ad-metrics";
-import { formatDate, formatInt, formatRoas } from "@/lib/format";
+import { formatInt, formatRoas } from "@/lib/format";
 import { addDecisionLog, unlinkAd } from "@/app/actions/creatives";
 import { Button, Chip } from "@/components/ui/primitives";
-import { useFormat } from "@/components/providers/settings-provider";
+import { useDate, useFormat } from "@/components/providers/settings-provider";
 
 const BANNER_TONE: Record<string, string> = {
   positive: "bg-green-bg text-green",
@@ -21,6 +21,7 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const fmt = useFormat();
+  const fmtDate = useDate();
   const rec = recommendation(data);
   const d = lifetimeDerived(data.lifetime);
 
@@ -78,7 +79,7 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
           </div>
           <div className="text-[11px] text-muted">
             {data.campaignId} · {data.adsetId} · {data.placement} · Synced from Meta · read-only
-            {data.lastSyncedAt && ` · last synced ${formatDate(data.lastSyncedAt)}`}
+            {data.lastSyncedAt && ` · last synced ${fmtDate(data.lastSyncedAt)}`}
           </div>
         </div>
         {perms.unlink && (
@@ -167,6 +168,7 @@ function DecisionLog({
 }) {
   const [text, setText] = useState("");
   const [pending, startTransition] = useTransition();
+  const fmtDate = useDate();
 
   function add() {
     startTransition(async () => {
@@ -184,7 +186,7 @@ function DecisionLog({
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="What did you change in Ads Manager, and why?"
-            className="min-h-16 w-full rounded-[var(--radius-control)] border border-[#e0e5ea] p-2 text-sm outline-none focus:border-brand"
+            className="min-h-16 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface p-2 text-sm text-ink outline-none focus:border-brand"
           />
           <div className="mt-2 flex justify-end">
             <Button disabled={pending || !text.trim()} onClick={add}>{pending ? "Saving…" : "Add entry"}</Button>
@@ -200,7 +202,7 @@ function DecisionLog({
           <ul className="flex flex-col gap-3">
             {log.map((e, i) => (
               <li key={i} className="border-b border-line-2 pb-3 last:border-0">
-                <div className="text-[11px] text-muted">{formatDate(e.createdAt)} · {e.author}</div>
+                <div className="text-[11px] text-muted">{fmtDate(e.createdAt)} · {e.author}</div>
                 <p className="mt-0.5 text-sm text-ink-2">{e.text}</p>
               </li>
             ))}

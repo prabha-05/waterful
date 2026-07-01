@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import type { CreativeCard } from "@/lib/data/creatives";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
-import { formatDate } from "@/lib/format";
 import { linkAd } from "@/app/actions/creatives";
 import { Button, Chip, Field, Input, Modal, StatusPill } from "@/components/ui/primitives";
+import { useDate } from "@/components/providers/settings-provider";
 import { TYPE_TINT } from "@/lib/status";
 
 export function AwaitingClient({
@@ -19,6 +19,7 @@ export function AwaitingClient({
   perms: Permissions;
 }) {
   const router = useRouter();
+  const fmtDate = useDate();
   const [linkFor, setLinkFor] = useState<string | null>(null);
 
   if (items.length === 0) {
@@ -45,7 +46,7 @@ export function AwaitingClient({
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
               <Chip className="bg-brand-chip text-brand-deep">{c.angle}</Chip>
               {c.personas.slice(0, 2).map((p) => <Chip key={p} className="bg-surface-2 text-ink-3">{p}</Chip>)}
-              <span>· {c.type}/{c.subtype} · {formatDate(c.createdAt)}</span>
+              <span>· {c.type}/{c.subtype} · {fmtDate(c.createdAt)}</span>
             </div>
           </div>
           {perms.link ? (

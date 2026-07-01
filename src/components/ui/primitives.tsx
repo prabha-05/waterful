@@ -164,7 +164,7 @@ export function Field({
 }
 
 const controlClass =
-  "h-10 w-full rounded-[var(--radius-control)] border border-[#e0e5ea] bg-surface px-3 text-sm text-ink outline-none focus:border-brand disabled:bg-surface-2 disabled:text-muted";
+  "h-10 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-3 text-sm text-ink outline-none focus:border-brand disabled:bg-surface-2 disabled:text-muted";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input className={controlClass} {...props} />;
