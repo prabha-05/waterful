@@ -1,14 +1,18 @@
-# Render — two separate services (decisions §2): the web app and the Meta
-# cron/worker run independently so a long backfill never blocks web requests.
+# Render — free-tier deploy.
 #
-# `--include=dev` on the build installs devDependencies (typescript, tailwind,
-# tsx) which Render otherwise prunes — the Next build and the worker's tsx need them.
+# The web app runs on the FREE plan (spins down after ~15 min idle; cold start on
+# next request). The nightly Meta-sync CRON is omitted because Render cron jobs have
+# no free tier — trigger syncs manually from the in-app Meta Sync console instead.
+# (To restore the automated 6 AM sync, re-add the `cron` service on a paid plan, or
+# point a free external scheduler at a sync endpoint.)
+#
+# `--include=dev` on the build installs devDependencies (typescript, tailwind) which
+# Render otherwise prunes — the Next build needs them.
 services:
-  # 1) Web app (Next.js)
   - type: web
     name: waterful-web
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm run start
     envVars:
@@ -16,24 +20,6 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: META_ACCESS_TOKEN
-        sync: false
-      - key: META_AD_ACCOUNT_ID
-        sync: false
-      - key: META_GRAPH_VERSION
-        value: v21.0
-
-  # 2) Meta sync — daily 06:00 cron (decisions §6: every day 6 AM, last 28 days).
-  - type: cron
-    name: waterful-meta-sync
-    runtime: node
-    plan: starter
-    schedule: "0 6 * * *"
-    buildCommand: npm ci --include=dev
-    startCommand: npm run worker:sync
-    envVars:
       - key: DATABASE_URL
         sync: false
       - key: META_ACCESS_TOKEN
