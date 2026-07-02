@@ -98,7 +98,7 @@ export function CreativeDetail({
             <div className="mb-2 flex items-center gap-2">
               <Chip className="bg-surface-2 text-ink-3">{detail.type}</Chip>
               <StatusPill status={detail.status} />
-              <ScorePill score={totals.score} />
+              <ScorePill score={totals.spend > 0 ? totals.score : null} />
               <button onClick={onClose} className="ml-auto text-muted hover:text-ink">✕</button>
             </div>
             <h2 className="text-lg font-bold text-ink">{detail.title}</h2>

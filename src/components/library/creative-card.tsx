@@ -84,7 +84,7 @@ export function CreativeCardView({
           </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-wide text-muted">Score</div>
-            <ScorePill score={card.score} />
+            <ScorePill score={card.spend > 0 ? card.score : null} />
           </div>
         </div>
       </div>

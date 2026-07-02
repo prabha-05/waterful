@@ -165,7 +165,7 @@ function Row({ node, depth, maxSpend }: { node: TreeNode; depth: number; maxSpen
         <span className={cn("text-right font-mono", roasColor(roas))}>
           {node.spend > 0 ? formatRoas(roas) : "—"}
         </span>
-        <span className="flex justify-end"><ScorePill score={score} /></span>
+        <span className="flex justify-end"><ScorePill score={node.spend > 0 ? score : null} /></span>
         <span className="text-right font-mono text-ink-3">{node.count}</span>
       </div>
       {open && node.children.map((c) => <Row key={c.key} node={c} depth={depth + 1} maxSpend={maxSpend} />)}

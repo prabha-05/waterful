@@ -55,7 +55,27 @@ export function StatusPill({ status }: { status: CreativeStatus }) {
   );
 }
 
-export function ScorePill({ score, className }: { score: number; className?: string }) {
+export function ScorePill({
+  score,
+  className,
+}: {
+  /** null = unproven (no spend / not linked yet) → renders a neutral “—”. */
+  score: number | null;
+  className?: string;
+}) {
+  if (score == null) {
+    return (
+      <span
+        title="Unscored — no spend yet"
+        className={cn(
+          "inline-flex items-center justify-center rounded-md bg-surface-2 px-2 py-0.5 font-mono text-sm font-semibold text-muted",
+          className,
+        )}
+      >
+        —
+      </span>
+    );
+  }
   return (
     <span
       className={cn(
