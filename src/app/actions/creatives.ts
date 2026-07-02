@@ -206,49 +206,55 @@ export async function linkAd(
     sql`select (label = 'Video') as "isVideo" from types where id = ${c.typeId}`,
   ) as unknown as { isVideo: boolean }[];
 
-  // On-link lifetime backfill — pull full history so Lifetime KPIs + Score are correct (§6).
-  const pull = await fetchMetaData(adId, { isVideo: Boolean(isVideo) });
+  try {
+    // On-link lifetime backfill — pull full history so Lifetime KPIs + Score are correct (§6).
+    const pull = await fetchMetaData(adId, { isVideo: Boolean(isVideo) });
 
-  await db.insert(adActivations).values({
-    metaAdId: adId,
-    creativeId,
-    campaignId: pull.activation.campaignId,
-    adsetId: pull.activation.adsetId,
-    placement: pull.activation.placement,
-    status: pull.activation.status,
-    lastSyncedAt: new Date(),
-  });
+    await db.insert(adActivations).values({
+      metaAdId: adId,
+      creativeId,
+      campaignId: pull.activation.campaignId,
+      adsetId: pull.activation.adsetId,
+      placement: pull.activation.placement,
+      status: pull.activation.status,
+      lastSyncedAt: new Date(),
+    });
 
-  if (pull.daily.length > 0) {
-    await db.insert(adMetrics).values(
-      pull.daily.map((d) => ({
-        adId,
-        asOfDate: d.asOfDate,
-        spend: String(d.spend),
-        revenue: String(d.revenue),
-        impressions: d.impressions,
-        clicks: d.clicks,
-        conversions: d.conversions,
-        reach: d.reach,
-        thumbstop: d.thumbstop === null ? null : String(d.thumbstop),
-        hold: d.hold === null ? null : String(d.hold),
-      })),
-    );
+    if (pull.daily.length > 0) {
+      await db.insert(adMetrics).values(
+        pull.daily.map((d) => ({
+          adId,
+          asOfDate: d.asOfDate,
+          spend: String(d.spend),
+          revenue: String(d.revenue),
+          impressions: d.impressions,
+          clicks: d.clicks,
+          conversions: d.conversions,
+          reach: d.reach,
+          thumbstop: d.thumbstop === null ? null : String(d.thumbstop),
+          hold: d.hold === null ? null : String(d.hold),
+        })),
+      );
+    }
+    if (pull.ranges.length > 0) {
+      await db.insert(adRangeMetrics).values(
+        pull.ranges.map((r) => ({
+          adId,
+          range: r.range,
+          reach: r.reach,
+          frequency: String(r.frequency),
+          asOfDate: new Date().toISOString().slice(0, 10),
+        })),
+      );
+    }
+
+    // First ad linked → creative goes Live (status auto-derives, §7 constraints).
+    await db.update(creatives).set({ status: "live" }).where(eq(creatives.id, creativeId));
+  } catch (e) {
+    // Never crash the page — surface a friendly error in the modal instead.
+    console.log(`[linkAd] failed for ad ${adId}: ${(e as Error)?.message ?? e}`);
+    return { ok: false, error: "Couldn't pull data for that Ad ID. Please try again." };
   }
-  if (pull.ranges.length > 0) {
-    await db.insert(adRangeMetrics).values(
-      pull.ranges.map((r) => ({
-        adId,
-        range: r.range,
-        reach: r.reach,
-        frequency: String(r.frequency),
-        asOfDate: new Date().toISOString().slice(0, 10),
-      })),
-    );
-  }
-
-  // First ad linked → creative goes Live (status auto-derives, §7 constraints).
-  await db.update(creatives).set({ status: "live" }).where(eq(creatives.id, creativeId));
 
   revalidateLoop();
   revalidatePath(`/ad/${adId}`);
