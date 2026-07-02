@@ -9,9 +9,11 @@ import { linkAd } from "@/app/actions/creatives";
 import { Button, Chip, Field, Input, Modal, StatusPill } from "@/components/ui/primitives";
 import { useDate } from "@/components/providers/settings-provider";
 import { TYPE_TINT } from "@/lib/status";
+import { CreativeDetail } from "./creative-detail";
 
 export function AwaitingClient({
   items,
+  taxonomy,
   perms,
 }: {
   items: CreativeCard[];
@@ -21,6 +23,7 @@ export function AwaitingClient({
   const router = useRouter();
   const fmtDate = useDate();
   const [linkFor, setLinkFor] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (items.length === 0) {
     return (
@@ -34,7 +37,11 @@ export function AwaitingClient({
   return (
     <div className="flex flex-col gap-2 p-6">
       {items.map((c) => (
-        <div key={c.id} className="flex items-center gap-4 rounded-[var(--radius-card)] border border-line bg-surface p-3">
+        <div
+          key={c.id}
+          onClick={() => setSelectedId(c.id)}
+          className="flex cursor-pointer items-center gap-4 rounded-[var(--radius-card)] border border-line bg-surface p-3 hover:border-brand/40 hover:bg-surface-2"
+        >
           <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${TYPE_TINT[c.type] ?? "bg-surface-2"}`}>
             <span className="font-mono text-[9px] font-semibold uppercase text-ink-2/70">{c.type}</span>
           </div>
@@ -50,12 +57,25 @@ export function AwaitingClient({
             </div>
           </div>
           {perms.link ? (
-            <Button variant="secondary" onClick={() => setLinkFor(c.id)}>Link Ad ID</Button>
+            <Button
+              variant="secondary"
+              onClick={(e) => { e.stopPropagation(); setLinkFor(c.id); }}
+            >
+              Link Ad ID
+            </Button>
           ) : (
-            <Chip className="bg-amber-bg text-amber">Awaiting Performance</Chip>
+            <Chip className="bg-amber-bg text-amber">Open to view / download</Chip>
           )}
         </div>
       ))}
+
+      <CreativeDetail
+        creativeId={selectedId}
+        taxonomy={taxonomy}
+        perms={perms}
+        onClose={() => setSelectedId(null)}
+        onChanged={() => router.refresh()}
+      />
 
       {linkFor && (
         <LinkModal
