@@ -19,6 +19,20 @@ export type AppUser = {
   hasValidRole: boolean;
 };
 
+// The identity comes from the JWT (free/local); only the role+permissions need a DB
+// read, and those change rarely (only via Admin → Access). Cache the resolved user
+// briefly so we don't spend a Singapore→Mumbai round-trip on EVERY navigation. Access
+// management actions call clearUserCache() so role changes take effect immediately;
+// otherwise a change is picked up within USER_TTL_MS.
+const userCache = new Map<string, { user: AppUser; at: number }>();
+const USER_TTL_MS = 30_000;
+
+/** Invalidate the cached role/permission snapshot (call after any Access change). */
+export function clearUserCache(email?: string) {
+  if (email) userCache.delete(email.toLowerCase());
+  else userCache.clear();
+}
+
 /**
  * Resolve the current request's app user from the Supabase session.
  *
@@ -67,6 +81,12 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
 
   if (!email) return null;
 
+  // Serve the role/permission snapshot from the short-TTL cache when fresh.
+  const cached = userCache.get(email);
+  if (cached && Date.now() - cached.at < USER_TTL_MS) {
+    return cached.user;
+  }
+
   const [row] = await timed("session.userQuery", () =>
     db
       .select({
@@ -93,7 +113,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
 
   // Authenticated with Google but never admitted by an Admin — no row.
   if (!row) {
-    return {
+    const noRoleUser: AppUser = {
       id: "",
       name: fullName ?? email,
       email,
@@ -101,6 +121,8 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
       permissions: NO_PERMISSIONS,
       hasValidRole: false,
     };
+    userCache.set(email, { user: noRoleUser, at: Date.now() });
+    return noRoleUser;
   }
 
   // Capture Google's stable identifier on first sight (decisions §3, best-effort).
@@ -113,7 +135,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
     row.archivedAt == null &&
     row.roleArchivedAt == null;
 
-  return {
+  const appUser: AppUser = {
     id: row.id,
     name: row.name,
     email: row.email,
@@ -130,4 +152,6 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
       : NO_PERMISSIONS,
     hasValidRole,
   };
+  userCache.set(email, { user: appUser, at: Date.now() });
+  return appUser;
 });

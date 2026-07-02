@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { roles, users } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
+import { clearUserCache } from "@/lib/auth/session";
 import type { Permission } from "@/lib/auth/permissions";
 
 export type ActionResult = { ok: boolean; error?: string };
@@ -38,6 +39,7 @@ async function isActiveAdmin(userId: string): Promise<boolean> {
 }
 
 function done(): ActionResult {
+  clearUserCache(); // role/user change → drop cached permission snapshots
   revalidatePath("/access");
   return { ok: true };
 }
@@ -144,6 +146,7 @@ export async function updateRolePerm(
   if (role.isLocked) return { ok: false, error: "This is a locked system role and can't be edited." };
 
   await db.update(roles).set({ [PERM_FIELD[perm]]: value }).where(eq(roles.id, roleId));
+  clearUserCache(); // permission change on a role affects everyone with it
   revalidatePath("/access");
   return { ok: true };
 }
