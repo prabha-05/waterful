@@ -78,6 +78,14 @@ export function CreativeDetail({
     });
   }
 
+  const downloadableFiles = detail?.files.filter((f) => f.url) ?? [];
+  function downloadAll() {
+    if (!detail) return;
+    downloadableFiles.forEach((f) =>
+      triggerDownload(downloadHref(f.url!, downloadName(detail.title, f.storagePath, f.position, downloadableFiles.length))),
+    );
+  }
+
   return (
     <Drawer open={!!creativeId} onClose={onClose}>
       {loading || !detail ? (
@@ -115,31 +123,47 @@ export function CreativeDetail({
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4">
-            {/* File preview(s) */}
-            {detail.files.some((f) => f.url) && (
-              <div className="mb-4 flex gap-2 overflow-x-auto">
-                {detail.files.map((f) =>
-                  f.url ? (
-                    detail.type === "Video" ? (
-                      <video
-                        key={f.storagePath}
-                        src={`${f.url}#t=0.1`}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        className="h-44 rounded-[var(--radius-control)] border border-line bg-black"
-                      />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={f.storagePath}
-                        src={f.url}
-                        alt={detail.title}
-                        className="h-44 rounded-[var(--radius-control)] border border-line object-cover"
-                      />
-                    )
-                  ) : null,
-                )}
+            {/* File preview(s) + download */}
+            {downloadableFiles.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-ink">
+                    {detail.type === "Carousel" ? `Assets (${downloadableFiles.length})` : "Asset"}
+                  </h3>
+                  {downloadableFiles.length > 1 && (
+                    <button onClick={downloadAll} className="text-xs font-medium text-brand hover:underline">
+                      ⬇ Download all
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-3 overflow-x-auto">
+                  {downloadableFiles.map((f, i) => (
+                    <div key={f.storagePath} className="flex shrink-0 flex-col gap-1">
+                      {detail.type === "Video" ? (
+                        <video
+                          src={`${f.url}#t=0.1`}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="h-44 rounded-[var(--radius-control)] border border-line bg-black"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={f.url!}
+                          alt={detail.title}
+                          className="h-44 rounded-[var(--radius-control)] border border-line object-cover"
+                        />
+                      )}
+                      <a
+                        href={downloadHref(f.url!, downloadName(detail.title, f.storagePath, f.position, downloadableFiles.length))}
+                        className="flex items-center justify-center gap-1 rounded-[var(--radius-control)] border border-line bg-surface px-2 py-1.5 text-xs font-medium text-ink-2 hover:bg-surface-2"
+                      >
+                        ⬇ Download{downloadableFiles.length > 1 ? ` ${i + 1}` : ""}
+                      </a>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -228,6 +252,31 @@ export function CreativeDetail({
       )}
     </Drawer>
   );
+}
+
+/** Force a download from a Supabase signed URL: the `download` query param makes
+ * Storage respond with Content-Disposition: attachment (the HTML `download` attr is
+ * ignored cross-origin, so this is the reliable way). */
+function downloadHref(signedUrl: string, filename: string): string {
+  const sep = signedUrl.includes("?") ? "&" : "?";
+  return `${signedUrl}${sep}download=${encodeURIComponent(filename)}`;
+}
+
+/** A friendly filename from the creative title + the stored file's extension. */
+function downloadName(title: string, storagePath: string, position: number, total: number): string {
+  const ext = storagePath.split("?")[0].split(".").pop();
+  const base = (title.replace(/[^\w\d-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") || "creative").slice(0, 60);
+  const suffix = total > 1 ? `-${position + 1}` : "";
+  return ext && ext.length <= 5 ? `${base}${suffix}.${ext}` : `${base}${suffix}`;
+}
+
+function triggerDownload(href: string) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function Detailed({ label, children }: { label: string; children: React.ReactNode }) {
