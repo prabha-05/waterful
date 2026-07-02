@@ -28,8 +28,9 @@ const client =
   postgres(connectionString, {
     prepare: false, // required for pgBouncer transaction pooler
     fetch_types: false, // skip per-connection pg_catalog type lookups (pooler-friendly)
-    max: 5,
+    max: 8,
     idle_timeout: 20,
+    connect_timeout: 10, // fail a stalled connection fast instead of hanging for minutes
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb._pgClient = client;

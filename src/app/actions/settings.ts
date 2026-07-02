@@ -2,11 +2,7 @@
 
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth/guard";
-import {
-  DEFAULT_SETTINGS,
-  SETTINGS_COOKIE,
-  type Settings,
-} from "@/lib/settings";
+import { SETTINGS_COOKIE, type Settings } from "@/lib/settings";
 
 /** Persist per-user settings to a cookie (number format, landing, theme, date format). */
 export async function saveSettings(settings: Settings): Promise<{ ok: boolean }> {
@@ -26,5 +22,3 @@ export async function saveSettings(settings: Settings): Promise<{ ok: boolean }>
   });
   return { ok: true };
 }
-
-export { DEFAULT_SETTINGS };
