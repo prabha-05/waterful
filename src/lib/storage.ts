@@ -26,16 +26,22 @@ export async function signPaths(
     const result = await timed(`signPaths(${clean.length})`, () =>
       Promise.race([
         supabase.storage.from(BUCKET).createSignedUrls(clean, expiresIn),
-        new Promise<{ data: null }>((resolve) =>
-          setTimeout(() => resolve({ data: null }), SIGN_TIMEOUT_MS),
+        new Promise<{ data: null; error: { message: string } }>((resolve) =>
+          setTimeout(() => resolve({ data: null, error: { message: "sign-timeout" } }), SIGN_TIMEOUT_MS),
         ),
       ]),
     );
+    const anyResult = result as { data: unknown; error?: { message?: string } };
+    if (anyResult.error) {
+      console.log(`[signPaths] top-level error: ${anyResult.error.message ?? JSON.stringify(anyResult.error)}`);
+    }
     for (const item of result.data ?? []) {
+      if (item.error) console.log(`[signPaths] item error for ${item.path}: ${JSON.stringify(item.error)}`);
       if (item.path && item.signedUrl) map.set(item.path, item.signedUrl);
     }
-  } catch {
-    // Network/RLS error — degrade gracefully to placeholders.
+    console.log(`[signPaths] signed ${map.size}/${clean.length}`);
+  } catch (e) {
+    console.log(`[signPaths] threw: ${(e as Error)?.message ?? String(e)}`);
   }
   return map;
 }
