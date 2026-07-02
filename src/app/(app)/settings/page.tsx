@@ -6,7 +6,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Number format & default landing (functional); theme & date format (stubbed)"
+        subtitle="Number format, default landing, theme, and date format."
       />
       <div className="flex-1 overflow-auto">
         <SettingsClient />
