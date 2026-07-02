@@ -42,8 +42,20 @@ export function AwaitingClient({
           onClick={() => setSelectedId(c.id)}
           className="flex cursor-pointer items-center gap-4 rounded-[var(--radius-card)] border border-line bg-surface p-3 hover:border-brand/40 hover:bg-surface-2"
         >
-          <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${TYPE_TINT[c.type] ?? "bg-surface-2"}`}>
-            <span className="font-mono text-[9px] font-semibold uppercase text-ink-2/70">{c.type}</span>
+          <div className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg ${TYPE_TINT[c.type] ?? "bg-surface-2"}`}>
+            {c.thumbUrl ? (
+              c.type === "Video" ? (
+                <>
+                  <video src={`${c.thumbUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                  <span className="absolute text-[10px] text-white">▶</span>
+                </>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={c.thumbUrl} alt={c.title} className="h-full w-full object-cover" />
+              )
+            ) : (
+              <span className="font-mono text-[9px] font-semibold uppercase text-ink-2/70">{c.type}</span>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
