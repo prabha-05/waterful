@@ -134,10 +134,12 @@ function Sparkline({ label, series, delta, good }: { label: string; series: numb
   const max = Math.max(...series, 1);
   const min = Math.min(...series, 0);
   const range = max - min || 1;
-  const w = 120, h = 32;
-  const pts = series
-    .map((v, i) => `${(i / Math.max(1, series.length - 1)) * w},${h - ((v - min) / range) * h}`)
-    .join(" ");
+  const w = 120, h = 32, pad = 3;
+  const coords = series.map((v, i) => ({
+    x: (i / Math.max(1, series.length - 1)) * w,
+    y: pad + (h - 2 * pad) * (1 - (v - min) / range),
+  }));
+  const pts = coords.map((c) => `${c.x},${c.y}`).join(" ");
   const up = delta >= 0;
   const positive = up === good;
   return (
@@ -148,8 +150,12 @@ function Sparkline({ label, series, delta, good }: { label: string; series: numb
           {up ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}%
         </span>
       </div>
-      <svg width={w} height={h} className="mt-1 w-full">
-        <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth="1.5" />
+      {/* Uniform scaling (default preserveAspectRatio) + auto height keeps day dots round. */}
+      <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 w-full">
+        <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        {coords.map((c, i) => (
+          <circle key={i} cx={c.x} cy={c.y} r="2.2" fill="var(--brand)" />
+        ))}
       </svg>
     </div>
   );
