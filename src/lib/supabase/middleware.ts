@@ -3,6 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 import { timed } from "@/lib/perf";
 
+// Max time to wait on Supabase auth before treating the request as logged out.
+const AUTH_TIMEOUT_MS = 2500;
+
 /**
  * Refresh the Supabase session on each request and expose the authenticated user.
  * Used by `src/proxy.ts` (Next.js 16 renamed Middleware → Proxy).
@@ -37,8 +40,27 @@ export async function updateSession(request: NextRequest) {
   // meant a cross-region call to Supabase auth (Mumbai) per click, which stalls the
   // whole app when their auth service is slow. Claims are enough for the auth gate;
   // authorization (roles/permissions) is resolved in the (app) layout.
-  const { data } = await timed("proxy.getClaims", () => supabase.auth.getClaims());
-  const user = data?.claims ?? null;
+  //
+  // FAIL-FAST: when the access token is expired, getClaims must refresh it over the
+  // network (a call to Supabase auth). If that service is degraded the call can hang
+  // for minutes and freeze the page — including /login, which also runs the proxy.
+  // Cap it: if auth doesn't answer in AUTH_TIMEOUT_MS we treat the request as logged
+  // out (→ bounced to /login) instead of blocking. A healthy local verify is <5ms, so
+  // this only ever trips during an outage.
+  const user = await timed("proxy.getClaims", async () => {
+    try {
+      const data = await Promise.race([
+        supabase.auth.getClaims().then((r) => r.data),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error("auth-timeout")), AUTH_TIMEOUT_MS),
+        ),
+      ]);
+      return data?.claims ?? null;
+    } catch {
+      // Timed out or auth errored — degrade to "no session" so the page still renders.
+      return null;
+    }
+  });
 
   return { response, user };
 }
