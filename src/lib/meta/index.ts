@@ -13,8 +13,19 @@ export async function fetchMetaData(
   opts: { isVideo: boolean; since?: Date },
 ): Promise<MetaPull> {
   if (process.env.META_ACCESS_TOKEN) {
-    const { fetchMetaData: fetchReal } = await import("./real");
-    return fetchReal(adId, opts);
+    try {
+      const { fetchMetaData: fetchReal } = await import("./real");
+      return await fetchReal(adId, opts);
+    } catch (err) {
+      // Token expired/invalid or the ad isn't in this account → don't hard-fail the
+      // link/sync; fall back to the deterministic mock so the flow still works.
+      // Logged loudly so simulated data is never mistaken for real Meta data.
+      console.log(
+        `[meta] real provider failed for ad ${adId}: ${(err as Error).message}. ` +
+          `Falling back to MOCK (simulated) data.`,
+      );
+      return fetchMock(adId, opts);
+    }
   }
   return fetchMock(adId, opts);
 }
