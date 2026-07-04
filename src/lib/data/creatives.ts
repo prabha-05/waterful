@@ -219,8 +219,22 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
     from ad_metrics where ad_id = ${adId}`;
   const ranges = await sqlClient`
     select range, reach, frequency from ad_range_metrics where ad_id = ${adId}`;
+  // Calendar-continuous last 14 days ending today. Meta only returns rows for days
+  // the ad delivered, so a paused ad has gaps — fill them with zeros so "Last 7 days"
+  // reflects real calendar days (a recently-paused ad reads as a flat zero tail,
+  // matching its de-duplicated reach going to 0). Chronological (oldest → newest).
   const daily = await sqlClient`
-    select * from ad_metrics where ad_id = ${adId} order by as_of_date desc limit 14`;
+    select to_char(days.d, 'YYYY-MM-DD') as as_of_date,
+           coalesce(m.spend, 0) as spend,
+           coalesce(m.revenue, 0) as revenue,
+           coalesce(m.impressions, 0) as impressions,
+           coalesce(m.reach, 0) as reach,
+           coalesce(m.clicks, 0) as clicks,
+           coalesce(m.conversions, 0) as conversions,
+           m.thumbstop, m.hold
+    from generate_series((current_date - interval '13 days')::date, current_date, interval '1 day') as days(d)
+    left join ad_metrics m on m.ad_id = ${adId} and m.as_of_date = days.d
+    order by days.d asc`;
   const log = await sqlClient`
     select l.text, l.created_at, u.name as author
     from ad_decision_log l join users u on u.id = l.author_id
@@ -247,8 +261,6 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
       frequency: Number(lifetimeReach?.frequency ?? 0),
     },
     daily: daily
-      .slice()
-      .reverse()
       .map((d) => ({
         asOfDate: String(d.as_of_date),
         spend: Number(d.spend),
