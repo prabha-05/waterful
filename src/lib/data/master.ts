@@ -52,21 +52,24 @@ export async function getMasterData(): Promise<MasterData> {
     from hook_types h order by h.label`) as unknown as LabelRow[];
 
   // Angle↔Persona mapping with per-pair usage (locked when a creative uses that exact pair).
+  // Driven FROM angles (left join) so EVERY active angle shows a row + "+ Add persona",
+  // including angles with no personas yet — otherwise a brand-new angle can never be mapped.
   const mapRows = (await sqlClient`
-    select ap.angle_id as "angleId", a.label as "angleLabel",
+    select a.id as "angleId", a.label as "angleLabel",
            ap.persona_id as "personaId", p.label as "personaLabel",
            (select count(*)::int from creatives c
               join creative_personas cp on cp.creative_id = c.id
-              where c.angle_id = ap.angle_id and cp.persona_id = ap.persona_id) as usage
-    from angle_personas ap
-    join angles a on a.id = ap.angle_id
-    join personas p on p.id = ap.persona_id
+              where c.angle_id = a.id and cp.persona_id = ap.persona_id) as usage
+    from angles a
+    left join angle_personas ap on ap.angle_id = a.id
+    left join personas p on p.id = ap.persona_id
+    where a.archived_at is null
     order by a.label, p.label`) as unknown as {
     angleId: string;
     angleLabel: string;
-    personaId: string;
-    personaLabel: string;
-    usage: number;
+    personaId: string | null;
+    personaLabel: string | null;
+    usage: number | null;
   }[];
 
   const mapping: MappingRow[] = [];
@@ -76,7 +79,10 @@ export async function getMasterData(): Promise<MasterData> {
       row = { angleId: m.angleId, angleLabel: m.angleLabel, personas: [] };
       mapping.push(row);
     }
-    row.personas.push({ personaId: m.personaId, personaLabel: m.personaLabel, usage: m.usage });
+    // Left join yields a null persona row for angles with no mappings yet — skip it.
+    if (m.personaId && m.personaLabel) {
+      row.personas.push({ personaId: m.personaId, personaLabel: m.personaLabel, usage: m.usage ?? 0 });
+    }
   }
 
   return {
