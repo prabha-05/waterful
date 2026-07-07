@@ -10,6 +10,7 @@ import { Button, Chip, Field, Input, Modal, StatusPill } from "@/components/ui/p
 import { useDate } from "@/components/providers/settings-provider";
 import { TYPE_TINT } from "@/lib/status";
 import { CreativeDetail } from "./creative-detail";
+import { VideoThumb } from "./video-thumb";
 
 export function AwaitingClient({
   items,
@@ -46,7 +47,7 @@ export function AwaitingClient({
             {c.thumbUrl ? (
               c.type === "Video" ? (
                 <>
-                  <video src={`${c.thumbUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                  <VideoThumb src={c.thumbUrl!} alt={c.title} className="h-full w-full object-cover" />
                   <span className="absolute text-[10px] text-white">▶</span>
                 </>
               ) : (

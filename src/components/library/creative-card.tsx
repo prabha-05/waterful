@@ -5,6 +5,7 @@ import { formatRoas } from "@/lib/format";
 import { TYPE_TINT } from "@/lib/status";
 import { Chip, ScorePill, StatusPill } from "@/components/ui/primitives";
 import { useFormat } from "@/components/providers/settings-provider";
+import { VideoThumb } from "./video-thumb";
 
 export function CreativeCardView({
   card,
@@ -26,13 +27,7 @@ export function CreativeCardView({
         {card.thumbUrl ? (
           card.type === "Video" ? (
             <>
-              <video
-                src={`${card.thumbUrl}#t=0.1`}
-                muted
-                playsInline
-                preload="metadata"
-                className="h-full w-full object-cover"
-              />
+              <VideoThumb src={card.thumbUrl} alt={card.title} className="h-full w-full object-cover" />
               <span className="absolute flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white">
                 ▶
               </span>
