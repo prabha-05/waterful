@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
 import type { Permissions } from "@/lib/auth/permissions";
 import { visibleNav } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -13,13 +14,60 @@ type Props = {
   awaitingCount?: number;
 };
 
-/** Left sidebar (248px) with permission-gated nav — README §2. */
+/**
+ * Left sidebar (248px) with permission-gated nav — README §2.
+ * Desktop: static 248px column. Mobile (<md): a top bar with a hamburger that
+ * slides the sidebar in as an overlay drawer.
+ */
 export function Sidebar({ user, awaitingCount = 0 }: Props) {
   const pathname = usePathname();
   const items = visibleNav(user.permissions);
+  const [open, setOpen] = useState(false);
+
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => setOpen(false), [pathname]);
 
   return (
-    <aside className="flex h-screen w-[248px] flex-col border-r border-line bg-surface">
+    <>
+      {/* Mobile top bar (hamburger + logo) — hidden on desktop. */}
+      <div className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface px-4 md:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open menu"
+          className="text-ink-2 hover:text-ink"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+        <Image src="/waterful-zero-logo.jpeg" alt="WaterfulZERO" width={26} height={26} className="rounded-md" />
+        <span className="text-sm font-bold text-ink">WaterfulZERO</span>
+      </div>
+
+      {/* Backdrop when the drawer is open (mobile only). */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-screen w-[248px] flex-col border-r border-line bg-surface transition-transform duration-200",
+          "md:static md:z-auto md:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        {/* Close button — mobile only. */}
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Close menu"
+          className="absolute right-3 top-4 text-ink-3 hover:text-ink md:hidden"
+        >
+          <X className="h-5 w-5" />
+        </button>
       <div className="flex items-center gap-2.5 px-5 py-5">
         <Image
           src="/waterful-zero-logo.jpeg"
@@ -87,6 +135,7 @@ export function Sidebar({ user, awaitingCount = 0 }: Props) {
           </div>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

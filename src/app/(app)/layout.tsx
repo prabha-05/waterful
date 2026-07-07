@@ -36,7 +36,8 @@ export default async function AppLayout({
             permissions: user.permissions,
           }}
         />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* pt-14 on mobile clears the fixed hamburger top bar; none on desktop. */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-14 md:pt-0">
           {children}
         </div>
       </div>

@@ -94,7 +94,7 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
         )}
       </div>
 
-      <div className="grid flex-1 grid-cols-[1fr_340px] gap-6 overflow-auto p-7">
+      <div className="grid flex-1 grid-cols-1 gap-6 overflow-auto p-4 sm:p-7 lg:grid-cols-[1fr_340px]">
         {/* Left — banner + KPIs + 7-day graphs */}
         <div className="flex flex-col gap-5">
           <div className={`rounded-[var(--radius-card)] px-4 py-3 text-sm font-medium ${BANNER_TONE[rec.tone]}`}>
