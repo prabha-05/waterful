@@ -43,7 +43,7 @@ export function MetaSyncClient({ data }: { data: MetaSyncData }) {
           <Chip className="bg-green-bg text-green">Active</Chip>
         </div>
         <p className="mb-4 text-sm text-ink-3">Every day at 6:00 AM · last 28 days · every linked ad.</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Tile label="Ads tracked" value={String(data.adsTracked)} />
           <Tile label="Last sync" value={data.lastSync ? `${fmtDate(data.lastSync.at)} · ${data.lastSync.kind}` : "—"} />
           <Tile label="Next run" value="Tomorrow 6:00 AM" />

@@ -106,20 +106,25 @@ export function PerfTree({ creatives }: { creatives: DashCreative[] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_repeat(4,90px)] items-center gap-2 border-b border-line-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-        <span>{root === "angle" ? "Angle" : "Persona"} → Type → Sub-type</span>
-        <span className="text-right">Spend</span>
-        <span className="text-right">ROAS</span>
-        <span className="text-right">Score</span>
-        <span className="text-right"># creatives</span>
-      </div>
+      {/* Scroll the table sideways on narrow screens rather than breaking the page. */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[560px]">
+          <div className="grid grid-cols-[1fr_repeat(4,90px)] items-center gap-2 border-b border-line-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+            <span>{root === "angle" ? "Angle" : "Persona"} → Type → Sub-type</span>
+            <span className="text-right">Spend</span>
+            <span className="text-right">ROAS</span>
+            <span className="text-right">Score</span>
+            <span className="text-right"># creatives</span>
+          </div>
 
-      <div>
-        {tree.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted">No data yet — link some ads.</p>
-        ) : (
-          tree.map((n) => <Row key={n.key} node={n} depth={0} maxSpend={maxSpend} />)
-        )}
+          <div>
+            {tree.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted">No data yet — link some ads.</p>
+            ) : (
+              tree.map((n) => <Row key={n.key} node={n} depth={0} maxSpend={maxSpend} />)
+            )}
+          </div>
+        </div>
       </div>
 
       {root === "persona" && (

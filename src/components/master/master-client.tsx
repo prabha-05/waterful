@@ -118,13 +118,13 @@ function LabelRowView({
 }) {
   const [label, setLabel] = useState(item.label);
   return (
-    <div className={cn("flex items-center gap-3 px-3 py-2", item.archived && "opacity-60")}>
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2", item.archived && "opacity-60")}>
       <input
         value={label}
         disabled={pending}
         onChange={(e) => setLabel(e.target.value)}
         onBlur={() => label.trim() && label !== item.label && run(() => renameTaxonomy(kind, item.id, label))}
-        className="flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-ink hover:border-line focus:border-brand focus:outline-none"
+        className="min-w-[140px] flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm text-ink hover:border-line focus:border-brand focus:outline-none"
       />
       <span className="text-[11px] text-muted">in use on {item.usage}</span>
       {item.archived && <Chip className="bg-line-2 text-muted">Archived</Chip>}
