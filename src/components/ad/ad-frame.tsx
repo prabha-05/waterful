@@ -55,16 +55,30 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
     { label: "Hold", value: isVideo && avg("hold") !== null ? `${(avg("hold")! * 100).toFixed(1)}%` : "No data" },
   ];
 
+  // Compact point labels (Indian-style magnitudes, matches formatCurrency tiers).
+  const compact = (v: number) => {
+    const a = Math.abs(v);
+    const t = (x: number) => x.toFixed(x % 1 === 0 ? 0 : 1).replace(/\.0$/, "");
+    if (a >= 1e7) return `${t(v / 1e7)}Cr`;
+    if (a >= 1e5) return `${t(v / 1e5)}L`;
+    if (a >= 1e3) return `${t(v / 1e3)}k`;
+    return t(v);
+  };
+
+  const dates = last7.map((r) => r.asOfDate);
+  const roas7 = sumK(last7, "revenue") / Math.max(1, sumK(last7, "spend"));
+
   // 7-day mini-graphs with last-7-vs-prior-7 deltas. `good` = is an increase good?
-  const graphs: { label: string; series: number[]; delta: number; good: boolean }[] = [
-    { label: "Spend", series: last7.map((r) => r.spend), delta: delta(sumK(last7, "spend"), sumK(prior7, "spend")), good: true },
-    { label: "Revenue", series: last7.map((r) => r.revenue), delta: delta(sumK(last7, "revenue"), sumK(prior7, "revenue")), good: true },
-    { label: "Impressions", series: last7.map((r) => r.impressions), delta: delta(sumK(last7, "impressions"), sumK(prior7, "impressions")), good: true },
-    { label: "Clicks", series: last7.map((r) => r.clicks), delta: delta(sumK(last7, "clicks"), sumK(prior7, "clicks")), good: true },
-    { label: "Conversions", series: last7.map((r) => r.conversions), delta: delta(sumK(last7, "conversions"), sumK(prior7, "conversions")), good: true },
-    { label: "ROAS", series: last7.map((r) => (r.spend > 0 ? r.revenue / r.spend : 0)), delta: delta(sumK(last7, "revenue") / Math.max(1, sumK(last7, "spend")), sumK(prior7, "revenue") / Math.max(1, sumK(prior7, "spend"))), good: true },
-    { label: "Reach", series: last7.map((r) => r.reach), delta: delta(data.range.last7.reach, data.range.prior7.reach), good: true },
-    { label: "Frequency", series: last7.map((r) => r.reach > 0 ? r.impressions / r.reach : 0), delta: delta(data.range.last7.frequency, data.range.prior7.frequency), good: false },
+  // `headline` = the 7-day total (or period value), `format` = per-day point labels.
+  const graphs: { label: string; series: number[]; delta: number; good: boolean; headline: string; format: (v: number) => string }[] = [
+    { label: "Spend", series: last7.map((r) => r.spend), delta: delta(sumK(last7, "spend"), sumK(prior7, "spend")), good: true, headline: fmt(sumK(last7, "spend")), format: fmt },
+    { label: "Revenue", series: last7.map((r) => r.revenue), delta: delta(sumK(last7, "revenue"), sumK(prior7, "revenue")), good: true, headline: fmt(sumK(last7, "revenue")), format: fmt },
+    { label: "Impressions", series: last7.map((r) => r.impressions), delta: delta(sumK(last7, "impressions"), sumK(prior7, "impressions")), good: true, headline: formatInt(sumK(last7, "impressions")), format: compact },
+    { label: "Clicks", series: last7.map((r) => r.clicks), delta: delta(sumK(last7, "clicks"), sumK(prior7, "clicks")), good: true, headline: formatInt(sumK(last7, "clicks")), format: compact },
+    { label: "Conversions", series: last7.map((r) => r.conversions), delta: delta(sumK(last7, "conversions"), sumK(prior7, "conversions")), good: true, headline: formatInt(sumK(last7, "conversions")), format: compact },
+    { label: "ROAS", series: last7.map((r) => (r.spend > 0 ? r.revenue / r.spend : 0)), delta: delta(roas7, sumK(prior7, "revenue") / Math.max(1, sumK(prior7, "spend"))), good: true, headline: formatRoas(roas7), format: (v) => `${v.toFixed(1)}×` },
+    { label: "Reach", series: last7.map((r) => r.reach), delta: delta(data.range.last7.reach, data.range.prior7.reach), good: true, headline: formatInt(data.range.last7.reach), format: compact },
+    { label: "Frequency", series: last7.map((r) => r.reach > 0 ? r.impressions / r.reach : 0), delta: delta(data.range.last7.frequency, data.range.prior7.frequency), good: false, headline: data.range.last7.frequency.toFixed(2), format: (v) => v.toFixed(2) },
   ];
 
   return (
@@ -115,9 +129,9 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
 
           <section>
             <h3 className="mb-2 text-sm font-semibold text-ink">Last 7 days</h3>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {graphs.map((g) => (
-                <Sparkline key={g.label} {...g} />
+                <Sparkline key={g.label} dates={dates} {...g} />
               ))}
             </div>
           </section>
@@ -130,31 +144,63 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
   );
 }
 
-function Sparkline({ label, series, delta, good }: { label: string; series: number[]; delta: number; good: boolean }) {
+function Sparkline({
+  label,
+  series,
+  dates,
+  delta,
+  good,
+  headline,
+  format,
+}: {
+  label: string;
+  series: number[];
+  dates: string[];
+  delta: number;
+  good: boolean;
+  headline: string;
+  format: (v: number) => string;
+}) {
   const max = Math.max(...series, 1);
   const min = Math.min(...series, 0);
   const range = max - min || 1;
-  const w = 120, h = 32, pad = 3;
+  // Room above the line for value labels, below for date labels, at the sides
+  // so the edge labels don't clip.
+  const w = 300, h = 96, padX = 22, padTop = 16, padBottom = 16;
   const coords = series.map((v, i) => ({
-    x: (i / Math.max(1, series.length - 1)) * w,
-    y: pad + (h - 2 * pad) * (1 - (v - min) / range),
+    x: padX + (i / Math.max(1, series.length - 1)) * (w - 2 * padX),
+    y: padTop + (h - padTop - padBottom) * (1 - (v - min) / range),
   }));
   const pts = coords.map((c) => `${c.x},${c.y}`).join(" ");
   const up = delta >= 0;
   const positive = up === good;
+  const anchor = (i: number) => (i === 0 ? "start" : i === series.length - 1 ? "end" : "middle");
+  const shortDate = (s: string) => {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "" : `${d.getDate()} ${d.toLocaleString("en", { month: "short" })}`;
+  };
   return (
-    <div className="rounded-[var(--radius-control)] border border-line bg-surface p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-muted">{label}</span>
-        <span className={`text-[11px] font-medium ${positive ? "text-green" : "text-red"}`}>
+    <div className="rounded-[var(--radius-control)] border border-line bg-surface p-4">
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs text-muted">{label}</span>
+        <span className={`text-xs font-medium ${positive ? "text-green" : "text-red"}`}>
           {up ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}%
         </span>
       </div>
+      <div className="mt-0.5 font-mono text-base font-semibold text-ink">{headline}</div>
       {/* Uniform scaling (default preserveAspectRatio) + auto height keeps day dots round. */}
-      <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 w-full">
+      <svg viewBox={`0 0 ${w} ${h}`} className="mt-2 w-full">
         <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
         {coords.map((c, i) => (
-          <circle key={i} cx={c.x} cy={c.y} r="2.2" fill="var(--brand)" />
+          <g key={i}>
+            <circle cx={c.x} cy={c.y} r="2.2" fill="var(--brand)" />
+            <text x={c.x} y={c.y - 6} textAnchor={anchor(i)} fontSize="9" fill="var(--ink-2)" fontFamily="ui-monospace, monospace">
+              {format(series[i])}
+            </text>
+            <text x={c.x} y={h - 3} textAnchor={anchor(i)} fontSize="8.5" fill="var(--muted)">
+              {shortDate(dates[i])}
+            </text>
+          </g>
         ))}
       </svg>
     </div>
