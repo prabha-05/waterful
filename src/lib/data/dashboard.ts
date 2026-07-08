@@ -21,6 +21,7 @@ export type DashboardKpis = {
   roas: number;
   conversions: number;
   liveAds: number;
+  linkedCreatives: number;
 };
 
 export type CentralGroup = {
@@ -71,9 +72,9 @@ export async function getDashboard(): Promise<DashboardData> {
     conversions: Number(r.conversions) || 0,
   }));
 
-  const [{ n: liveAds }] = (await sqlClient`
-    select count(*)::int as n from ad_activations
-  `) as unknown as { n: number }[];
+  const [{ n: liveAds, c: linkedCreatives }] = (await sqlClient`
+    select count(*)::int as n, count(distinct creative_id)::int as c from ad_activations
+  `) as unknown as { n: number; c: number }[];
 
   // KPIs — additive sums (§6).
   const spend = creatives.reduce((s, c) => s + c.spend, 0);
@@ -85,6 +86,7 @@ export async function getDashboard(): Promise<DashboardData> {
     roas: spend > 0 ? revenue / spend : 0,
     conversions,
     liveAds: Number(liveAds) || 0,
+    linkedCreatives: Number(linkedCreatives) || 0,
   };
 
   return { creatives, kpis, central: centralGroup(creatives) };

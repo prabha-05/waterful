@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import type { DashCreative } from "@/lib/data/dashboard";
 import { creativeScore } from "@/lib/score";
-import { formatRoas } from "@/lib/format";
+import { formatInt, formatRoas } from "@/lib/format";
 import { ScorePill } from "@/components/ui/primitives";
-import { useFormat } from "@/components/providers/settings-provider";
 import { cn } from "@/lib/utils";
 
 type Dim = "angle" | "persona" | "type" | "subtype";
@@ -23,7 +22,7 @@ const DIM_TAB: Record<Dim, string> = {
   angle: "bg-brand",
   persona: "bg-[#7c5cd0]",
   type: "bg-green",
-  subtype: "bg-muted-2",
+  subtype: "bg-amber",
 };
 
 function nodeFrom(label: string, dim: Dim, items: DashCreative[], children: TreeNode[]): TreeNode {
@@ -48,31 +47,55 @@ function groupBy(items: DashCreative[], key: (c: DashCreative) => string): Map<s
   return m;
 }
 
-/** Angle/Persona → Type → Sub-type. Personas full-counted at level 1 (overlap). */
-function buildTree(creatives: DashCreative[], root: "angle" | "persona"): TreeNode[] {
-  const l1 = new Map<string, DashCreative[]>();
-  for (const c of creatives) {
-    const keys = root === "persona" ? c.personas : [c.angle];
-    for (const k of keys) {
-      if (!k) continue;
-      if (!l1.has(k)) l1.set(k, []);
-      l1.get(k)!.push(c);
+/** Full-counted persona grouping — a creative appears under each of its personas. */
+function groupByPersona(items: DashCreative[]): Map<string, DashCreative[]> {
+  const m = new Map<string, DashCreative[]>();
+  for (const c of items) {
+    for (const p of c.personas) {
+      if (!p) continue;
+      if (!m.has(p)) m.set(p, []);
+      m.get(p)!.push(c);
     }
   }
+  return m;
+}
+
+/**
+ * Four-level tree (design 02): Angle → Persona → Type → Sub-type, or with the
+ * first two levels swapped when starting from Persona. Personas full-counted.
+ */
+function buildTree(creatives: DashCreative[], root: "angle" | "persona"): TreeNode[] {
+  const bySpend = (a: TreeNode, b: TreeNode) => b.spend - a.spend;
 
   const subtypeNodes = (items: DashCreative[]) =>
     [...groupBy(items, (c) => c.subtype).entries()]
       .map(([st, its]) => nodeFrom(st, "subtype", its, []))
-      .sort((a, b) => b.spend - a.spend);
+      .sort(bySpend);
 
   const typeNodes = (items: DashCreative[]) =>
     [...groupBy(items, (c) => c.type).entries()]
       .map(([t, its]) => nodeFrom(t, "type", its, subtypeNodes(its)))
-      .sort((a, b) => b.spend - a.spend);
+      .sort(bySpend);
 
-  return [...l1.entries()]
-    .map(([label, items]) => nodeFrom(label, root, items, typeNodes(items)))
-    .sort((a, b) => b.spend - a.spend);
+  const personaNodes = (items: DashCreative[]) =>
+    [...groupByPersona(items).entries()]
+      .map(([p, its]) => nodeFrom(p, "persona", its, typeNodes(its)))
+      .sort(bySpend);
+
+  const angleNodes = (items: DashCreative[]) =>
+    [...groupBy(items, (c) => c.angle).entries()]
+      .map(([a, its]) => nodeFrom(a, "angle", its, typeNodes(its)))
+      .sort(bySpend);
+
+  if (root === "angle") {
+    return [...groupBy(creatives, (c) => c.angle).entries()]
+      .filter(([label]) => label)
+      .map(([label, items]) => nodeFrom(label, "angle", items, personaNodes(items)))
+      .sort(bySpend);
+  }
+  return [...groupByPersona(creatives).entries()]
+    .map(([label, items]) => nodeFrom(label, "persona", items, angleNodes(items)))
+    .sort(bySpend);
 }
 
 function roasColor(roas: number): string {
@@ -87,59 +110,70 @@ export function PerfTree({ creatives }: { creatives: DashCreative[] }) {
   const maxSpend = Math.max(...tree.map((n) => n.spend), 1);
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <h3 className="text-sm font-semibold text-ink">Performance tree</h3>
-        <div className="flex items-center gap-1 rounded-[var(--radius-control)] bg-surface-2 p-0.5 text-xs font-medium">
-          {(["angle", "persona"] as const).map((r) => (
-            <button
-              key={r}
-              onClick={() => setRoot(r)}
-              className={cn(
-                "rounded-md px-3 py-1 capitalize transition",
-                root === r ? "bg-surface text-ink shadow-sm" : "text-ink-3",
+    <section>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-ink">Performance tree</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            Angle → Persona → Type → Sub-type · expand any row to drill deeper
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted">Start from</span>
+          <div className="flex items-center gap-1 rounded-[var(--radius-control)] bg-surface-2 p-0.5 text-xs font-medium">
+            {(["angle", "persona"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRoot(r)}
+                className={cn(
+                  "rounded-md px-3 py-1 capitalize transition",
+                  root === r ? "bg-surface text-ink shadow-sm" : "text-ink-3",
+                )}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[var(--radius-card)] border border-line bg-surface">
+        {/* Scroll the table sideways on narrow screens rather than breaking the page. */}
+        <div className="overflow-x-auto">
+          <div className="min-w-[760px]">
+            <div className={cn(GRID, "border-b border-line-2 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wide text-muted")}>
+              <span>Angle / Persona / Type / Sub-type</span>
+              <span>Spend share</span>
+              <span className="text-right">Revenue</span>
+              <span className="text-right">ROAS</span>
+              <span className="text-right">Score</span>
+              <span className="text-right">Creatives</span>
+            </div>
+
+            <div>
+              {tree.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted">No data yet — link some ads.</p>
+              ) : (
+                tree.map((n) => <Row key={n.key} node={n} depth={0} maxSpend={maxSpend} />)
               )}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Scroll the table sideways on narrow screens rather than breaking the page. */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[560px]">
-          <div className="grid grid-cols-[1fr_repeat(4,90px)] items-center gap-2 border-b border-line-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-            <span>{root === "angle" ? "Angle" : "Persona"} → Type → Sub-type</span>
-            <span className="text-right">Spend</span>
-            <span className="text-right">ROAS</span>
-            <span className="text-right">Score</span>
-            <span className="text-right"># creatives</span>
-          </div>
-
-          <div>
-            {tree.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted">No data yet — link some ads.</p>
-            ) : (
-              tree.map((n) => <Row key={n.key} node={n} depth={0} maxSpend={maxSpend} />)
-            )}
+            </div>
           </div>
         </div>
       </div>
 
-      {root === "persona" && (
-        <p className="border-t border-line-2 px-4 py-2 text-[11px] text-muted">
-          Personas are full-counted — a creative with several personas appears under each, so
-          persona totals won&apos;t reconcile to the overall spend. Angle totals do.
-        </p>
-      )}
-    </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted">
+        A creative can carry more than one persona, so persona rows count it in full under each —
+        persona spend will overlap and won&apos;t sum to the total. Use it to see what&apos;s
+        working, not to reconcile budgets.
+      </p>
+    </section>
   );
 }
 
+const GRID = "grid grid-cols-[minmax(200px,1fr)_200px_110px_80px_70px_80px] items-center gap-3";
+
 function Row({ node, depth, maxSpend }: { node: TreeNode; depth: number; maxSpend: number }) {
   const [open, setOpen] = useState(false);
-  const fmt = useFormat();
   const roas = node.spend > 0 ? node.revenue / node.spend : 0;
   const score = creativeScore(node.spend, roas);
   const hasChildren = node.children.length > 0;
@@ -147,7 +181,7 @@ function Row({ node, depth, maxSpend }: { node: TreeNode; depth: number; maxSpen
   return (
     <>
       <div
-        className="grid grid-cols-[1fr_repeat(4,90px)] items-center gap-2 border-b border-line-2 px-4 py-2 text-sm hover:bg-surface-2"
+        className={cn(GRID, "border-b border-line-2 px-4 py-3 text-sm hover:bg-surface-2")}
         style={{ paddingLeft: 16 + depth * 18 }}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -158,15 +192,19 @@ function Row({ node, depth, maxSpend }: { node: TreeNode; depth: number; maxSpen
           ) : (
             <span className="w-3" />
           )}
-          <span className={cn("h-3 w-1 shrink-0 rounded", DIM_TAB[node.dim])} />
-          <span className="truncate text-ink">{node.label}</span>
+          <span className={cn("h-3.5 w-1 shrink-0 rounded", DIM_TAB[node.dim])} />
+          <span className="truncate font-medium text-ink">{node.label}</span>
         </div>
-        <div className="text-right">
-          <div className="font-mono text-ink">{fmt(node.spend)}</div>
-          <div className="ml-auto mt-0.5 h-1 w-full max-w-[80px] overflow-hidden rounded bg-line-2">
-            <div className="h-full bg-brand/60" style={{ width: `${Math.min(100, (node.spend / maxSpend) * 100)}%` }} />
+        <div className="pr-4">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-line-2">
+            <div
+              className="h-full rounded-full bg-brand"
+              style={{ width: `${Math.min(100, (node.spend / maxSpend) * 100)}%` }}
+            />
           </div>
+          <div className="mt-1 font-mono text-xs text-ink-3">₹{formatInt(node.spend)}</div>
         </div>
+        <span className="text-right font-mono text-ink">₹{formatInt(node.revenue)}</span>
         <span className={cn("text-right font-mono", roasColor(roas))}>
           {node.spend > 0 ? formatRoas(roas) : "—"}
         </span>

@@ -8,7 +8,7 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        subtitle="Find the central group — the persona/angle that wins at scale"
+        subtitle="Find your central group and what scales"
       />
       <div className="flex-1 overflow-auto">
         <DashboardClient data={data} />
