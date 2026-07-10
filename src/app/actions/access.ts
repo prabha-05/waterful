@@ -10,11 +10,12 @@ import type { Permission } from "@/lib/auth/permissions";
 
 export type ActionResult = { ok: boolean; error?: string };
 
-const PERM_FIELD: Record<Permission, "permUpload" | "permLink" | "permUnlink" | "permLog" | "permMaster" | "permAccess"> = {
+const PERM_FIELD: Record<Permission, "permUpload" | "permLink" | "permUnlink" | "permLog" | "permSync" | "permMaster" | "permAccess"> = {
   upload: "permUpload",
   link: "permLink",
   unlink: "permUnlink",
   log: "permLog",
+  sync: "permSync",
   master: "permMaster",
   access: "permAccess",
 };

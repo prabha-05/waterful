@@ -13,7 +13,7 @@ const STATUS_CLASS: Record<string, string> = {
   failed: "text-red bg-red-bg",
 };
 
-export function MetaSyncClient({ data }: { data: MetaSyncData }) {
+export function MetaSyncClient({ data, canRebuild }: { data: MetaSyncData; canRebuild: boolean }) {
   const router = useRouter();
   const fmtDate = useDate();
   const [pending, startTransition] = useTransition();
@@ -61,7 +61,8 @@ export function MetaSyncClient({ data }: { data: MetaSyncData }) {
         </Button>
       </div>
 
-      {/* Danger zone — full rebuild */}
+      {/* Danger zone — full rebuild (master only; server action re-checks) */}
+      {canRebuild && (
       <div className="rounded-[var(--radius-card)] border border-red/30 bg-red-bg/30 p-5">
         <div className="text-sm font-semibold text-red">Full rebuild (danger zone)</div>
         <div className="mb-3 text-xs text-ink-3">
@@ -79,6 +80,7 @@ export function MetaSyncClient({ data }: { data: MetaSyncData }) {
           </div>
         )}
       </div>
+      )}
 
       {msg && <div className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-sm text-ink-2">{msg}</div>}
 

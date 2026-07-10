@@ -20,7 +20,7 @@ export const NAV: NavItem[] = [
   { href: "/awaiting", label: "Awaiting", requires: ["upload", "link"], badge: "awaiting" },
   { href: "/master-data", label: "Master Data", requires: ["master"] },
   { href: "/access", label: "Access", requires: ["access"] },
-  { href: "/meta-sync", label: "Meta Sync", requires: ["master"] },
+  { href: "/meta-sync", label: "Meta Sync", requires: ["sync"] },
   { href: "/settings", label: "Settings" },
 ];
 

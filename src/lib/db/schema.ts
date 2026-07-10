@@ -72,11 +72,12 @@ export const roles = pgTable("roles", {
   isSystem: boolean("is_system").notNull().default(false),
   isLocked: boolean("is_locked").notNull().default(false),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
-  // The six permission booleans (decisions §4).
+  // The permission booleans (decisions §4; `sync` added 2026-07 for Meta Sync).
   permUpload: boolean("perm_upload").notNull().default(false),
   permLink: boolean("perm_link").notNull().default(false),
   permUnlink: boolean("perm_unlink").notNull().default(false),
   permLog: boolean("perm_log").notNull().default(false),
+  permSync: boolean("perm_sync").notNull().default(false),
   permMaster: boolean("perm_master").notNull().default(false),
   permAccess: boolean("perm_access").notNull().default(false),
 });

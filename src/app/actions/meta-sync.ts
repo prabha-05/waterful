@@ -6,11 +6,11 @@ import { runMetaSync } from "@/lib/meta/sync";
 
 export type ActionResult = { ok: boolean; error?: string; ads?: number };
 
-/** Manual 28-day re-pull for all linked ads (Admin-only — `master`, decisions §6). */
+/** Manual 28-day re-pull for all linked ads — `sync` perm (Admin + Performance). */
 export async function triggerSync(): Promise<ActionResult> {
   let user;
   try {
-    user = await requirePermission("master");
+    user = await requirePermission("sync");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

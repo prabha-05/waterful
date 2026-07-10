@@ -22,6 +22,7 @@ const PERM_LABEL: Record<Permission, string> = {
   link: "Link",
   unlink: "Unlink",
   log: "Log",
+  sync: "Meta Sync",
   master: "Master Data",
   access: "Access",
 };

@@ -61,6 +61,7 @@ export async function getRoles(): Promise<RoleRow[]> {
       permLink: roles.permLink,
       permUnlink: roles.permUnlink,
       permLog: roles.permLog,
+      permSync: roles.permSync,
       permMaster: roles.permMaster,
       permAccess: roles.permAccess,
       userCount: sql<number>`(select count(*)::int from users u where u.role_id = ${roles.id} and u.archived_at is null)`,
@@ -74,6 +75,7 @@ export async function getRoles(): Promise<RoleRow[]> {
       link: r.permLink,
       unlink: r.permUnlink,
       log: r.permLog,
+      sync: r.permSync,
       master: r.permMaster,
       access: r.permAccess,
     };

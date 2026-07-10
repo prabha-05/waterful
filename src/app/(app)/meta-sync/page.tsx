@@ -5,9 +5,9 @@ import { getMetaSyncData } from "@/lib/data/meta-sync";
 import { MetaSyncClient } from "@/components/meta-sync/meta-sync-client";
 
 export default async function MetaSyncPage() {
-  // Admin-only — gated on `master` (decisions §6 / HANDOVER §6).
+  // Gated on `sync` (Admin + Performance); Full Rebuild additionally needs `master`.
   const user = await getCurrentUser();
-  if (!user?.permissions.master) redirect("/library");
+  if (!user?.permissions.sync) redirect("/library");
 
   const data = await getMetaSyncData();
 
@@ -18,7 +18,7 @@ export default async function MetaSyncPage() {
         subtitle="Automatic daily sync, manual 28-day re-pull, full rebuild, sync history"
       />
       <div className="flex-1 overflow-auto">
-        <MetaSyncClient data={data} />
+        <MetaSyncClient data={data} canRebuild={user.permissions.master} />
       </div>
     </>
   );

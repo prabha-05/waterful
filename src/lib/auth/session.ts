@@ -102,6 +102,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
         permLink: roles.permLink,
         permUnlink: roles.permUnlink,
         permLog: roles.permLog,
+        permSync: roles.permSync,
         permMaster: roles.permMaster,
         permAccess: roles.permAccess,
       })
@@ -146,6 +147,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
           link: row.permLink ?? false,
           unlink: row.permUnlink ?? false,
           log: row.permLog ?? false,
+          sync: row.permSync ?? false,
           master: row.permMaster ?? false,
           access: row.permAccess ?? false,
         }
