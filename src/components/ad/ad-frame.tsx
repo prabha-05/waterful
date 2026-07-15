@@ -77,6 +77,7 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
     { label: "Clicks", series: last7.map((r) => r.clicks), delta: delta(sumK(last7, "clicks"), sumK(prior7, "clicks")), good: true, headline: formatInt(sumK(last7, "clicks")), format: compact },
     { label: "Conversions", series: last7.map((r) => r.conversions), delta: delta(sumK(last7, "conversions"), sumK(prior7, "conversions")), good: true, headline: formatInt(sumK(last7, "conversions")), format: compact },
     { label: "ROAS", series: last7.map((r) => (r.spend > 0 ? r.revenue / r.spend : 0)), delta: delta(roas7, sumK(prior7, "revenue") / Math.max(1, sumK(prior7, "spend"))), good: true, headline: formatRoas(roas7), format: (v) => `${v.toFixed(1)}×` },
+    { label: "CPM", series: last7.map((r) => (r.impressions > 0 ? (r.spend / r.impressions) * 1000 : 0)), delta: delta(sumK(last7, "spend") / Math.max(1, sumK(last7, "impressions")), sumK(prior7, "spend") / Math.max(1, sumK(prior7, "impressions"))), good: false, headline: fmt((sumK(last7, "spend") / Math.max(1, sumK(last7, "impressions"))) * 1000), format: fmt },
     { label: "Reach", series: last7.map((r) => r.reach), delta: delta(data.range.last7.reach, data.range.prior7.reach), good: true, headline: formatInt(data.range.last7.reach), format: compact },
     { label: "Frequency", series: last7.map((r) => r.reach > 0 ? r.impressions / r.reach : 0), delta: delta(data.range.last7.frequency, data.range.prior7.frequency), good: false, headline: data.range.last7.frequency.toFixed(2), format: (v) => v.toFixed(2) },
   ];
