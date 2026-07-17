@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
 import { fetchMetaData } from "@/lib/meta";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ActionResult = { ok: boolean; error?: string; id?: string };
 
@@ -169,6 +170,51 @@ export async function setArchived(
       .set({ status: Number(n) > 0 ? "live" : "draft" })
       .where(eq(creatives.id, creativeId));
   }
+
+  revalidateLoop();
+  return { ok: true, id: creativeId };
+}
+
+/**
+ * Hard-delete a mistaken upload — `upload`-gated (Admin + Content), and only
+ * while the creative has NO linked ads (metrics must never be silently lost;
+ * for anything with history, unlink first or archive instead).
+ */
+export async function deleteCreative(creativeId: string): Promise<ActionResult> {
+  try {
+    await requirePermission("upload");
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  const [c] = await db
+    .select({ id: creatives.id })
+    .from(creatives)
+    .where(eq(creatives.id, creativeId));
+  if (!c) return { ok: false, error: "Creative not found." };
+
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(adActivations)
+    .where(eq(adActivations.creativeId, creativeId));
+  if (Number(n) > 0)
+    return { ok: false, error: "This creative has linked ads — unlink them first, or archive instead." };
+
+  // Best-effort Storage cleanup (policy in 0006; orphans are invisible if it fails).
+  const files = await db
+    .select({ path: creativeFiles.storagePath })
+    .from(creativeFiles)
+    .where(eq(creativeFiles.creativeId, creativeId));
+  if (files.length > 0) {
+    try {
+      const supabase = await createSupabaseServerClient();
+      await supabase.storage.from("creatives").remove(files.map((f) => f.path));
+    } catch {
+      // ignore — DB delete below is the source of truth
+    }
+  }
+
+  await db.delete(creatives).where(eq(creatives.id, creativeId)); // cascades files + personas
 
   revalidateLoop();
   return { ok: true, id: creativeId };

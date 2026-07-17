@@ -9,7 +9,7 @@ import type { CreativeStatus } from "@/lib/status";
 import { creativeScore } from "@/lib/score";
 import { formatRoas } from "@/lib/format";
 import { useDate, useFormat } from "@/components/providers/settings-provider";
-import { editTags, linkAd, setArchived, unlinkAd } from "@/app/actions/creatives";
+import { deleteCreative, editTags, linkAd, setArchived, unlinkAd } from "@/app/actions/creatives";
 import {
   Button,
   Chip,
@@ -78,6 +78,23 @@ export function CreativeDetail({
     });
   }
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  function doDelete() {
+    if (!detail) return;
+    startTransition(async () => {
+      setDeleteError(null);
+      const res = await deleteCreative(detail.id);
+      if (res.ok) {
+        setConfirmDelete(false);
+        onChanged();
+        onClose();
+      } else {
+        setDeleteError(res.error ?? "Delete failed.");
+      }
+    });
+  }
+
   const downloadableFiles = detail?.files.filter((f) => f.url) ?? [];
   function downloadAll() {
     if (!detail) return;
@@ -106,7 +123,7 @@ export function CreativeDetail({
               Uploaded by {detail.uploadedBy} · {fmtDate(detail.createdAt)}
             </p>
             {perms.upload && (
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Button variant="secondary" onClick={() => setEditing(true)}>Edit tags</Button>
                 {detail.status !== "live" &&
                   (detail.status === "archived" ? (
@@ -118,8 +135,26 @@ export function CreativeDetail({
                       Archive
                     </Button>
                   ))}
+                {/* Delete — mistaken uploads only: needs `upload` perm AND no linked ads. */}
+                {detail.ads.length === 0 &&
+                  (!confirmDelete ? (
+                    <Button variant="danger" disabled={pending} onClick={() => setConfirmDelete(true)}>
+                      Delete
+                    </Button>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-red">Delete permanently?</span>
+                      <Button variant="danger" disabled={pending} onClick={doDelete}>
+                        {pending ? "Deleting…" : "Yes, delete"}
+                      </Button>
+                      <Button variant="secondary" disabled={pending} onClick={() => setConfirmDelete(false)}>
+                        Cancel
+                      </Button>
+                    </span>
+                  ))}
               </div>
             )}
+            {deleteError && <p className="mt-2 text-xs text-red">{deleteError}</p>}
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4">
