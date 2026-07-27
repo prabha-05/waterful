@@ -22,6 +22,22 @@ export type CreativeCard = {
   thumbUrl?: string | null; // resolved signed URL (set in the page, not the query)
 };
 
+/**
+ * Effective status: the stored status, except a Live creative whose linked ads
+ * are ALL paused/archived in Meta shows as "paused" — mirrors delivery reality
+ * so the Paused filter works (nothing else ever writes creative.status='paused').
+ */
+function effectiveStatus(r: Record<string, unknown>): CreativeStatus {
+  const stored = r.status as CreativeStatus;
+  const adCount = Number(r.ad_count ?? 0);
+  if (stored === "archived" || stored === "draft" || adCount === 0) return stored;
+  const adStatuses = String(r.ad_statuses ?? "");
+  if (adStatuses && !adStatuses.includes("active") && !adStatuses.includes("pending")) {
+    return "paused";
+  }
+  return stored;
+}
+
 function toCard(r: Record<string, unknown>): CreativeCard {
   const spend = Number(r.spend ?? 0);
   const revenue = Number(r.revenue ?? 0);
@@ -29,7 +45,7 @@ function toCard(r: Record<string, unknown>): CreativeCard {
   return {
     id: r.id as string,
     title: r.title as string,
-    status: r.status as CreativeStatus,
+    status: effectiveStatus(r),
     createdAt: String(r.created_at),
     type: r.type as string,
     subtype: r.subtype as string,
@@ -51,6 +67,7 @@ export async function listCreatives(): Promise<CreativeCard[]> {
            t.label as type, st.label as subtype, a.label as angle,
            coalesce(string_agg(distinct p.label, '||') filter (where p.label is not null), '') as personas,
            (select count(*)::int from ad_activations aa where aa.creative_id = c.id) as ad_count,
+           (select string_agg(distinct aa.status::text, ',') from ad_activations aa where aa.creative_id = c.id) as ad_statuses,
            (select storage_path from creative_files cf where cf.creative_id = c.id order by position limit 1) as thumb_path,
            coalesce(m.spend, 0) as spend, coalesce(m.revenue, 0) as revenue
     from creatives c
