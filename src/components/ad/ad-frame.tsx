@@ -17,6 +17,14 @@ const BANNER_TONE: Record<string, string> = {
   neutral: "bg-brand-chip text-brand-deep",
 };
 
+type WinKey = 7 | 15 | 30 | "all";
+const WINDOWS: { key: WinKey; label: string }[] = [
+  { key: 7, label: "Last 7 days" },
+  { key: 15, label: "Last 15 days" },
+  { key: 30, label: "Last 30 days" },
+  { key: "all", label: "Lifetime" },
+];
+
 export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -25,9 +33,18 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
   const rec = recommendation(data);
   const d = lifetimeDerived(data.lifetime);
 
-  const last7 = data.daily.slice(-7);
-  const prior7 = data.daily.slice(-14, -7);
-  const sumK = (rows: typeof last7, k: keyof (typeof last7)[number]) =>
+  // Selected trend window (7 / 15 / 30 days or lifetime), re-windowed client-side
+  // from the full daily history.
+  const [win, setWin] = useState<WinKey>(7);
+  const winLabel = WINDOWS.find((w) => w.key === win)!.label;
+  const n = win === "all" ? data.daily.length : Math.min(win, data.daily.length);
+  const cur = data.daily.slice(-n);
+  const prior = win === "all" ? [] : data.daily.slice(-2 * n, -n);
+  // Reach/frequency are de-duplicated by Meta and NOT summable — exact only for
+  // 7-day and lifetime; 15/30 fall back to an approximation (marked with ~).
+  const approxReach = win === 15 || win === 30;
+
+  const sumK = (rows: typeof cur, k: keyof (typeof cur)[number]) =>
     rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
   const delta = (now: number, prev: number) => (prev > 0 ? ((now - prev) / prev) * 100 : 0);
 
@@ -65,21 +82,30 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
     return t(v);
   };
 
-  const dates = last7.map((r) => r.asOfDate);
-  const roas7 = sumK(last7, "revenue") / Math.max(1, sumK(last7, "spend"));
+  const dates = cur.map((r) => r.asOfDate);
+  const roasCur = sumK(cur, "revenue") / Math.max(1, sumK(cur, "spend"));
 
-  // 7-day mini-graphs with last-7-vs-prior-7 deltas. `good` = is an increase good?
-  // `headline` = the 7-day total (or period value), `format` = per-day point labels.
+  // Windowed reach/frequency: exact from Meta's de-duplicated ranges for 7-day
+  // and lifetime; a summed approximation (~) for 15/30 where no de-duped value
+  // exists. Prior period is empty for lifetime, so its delta is 0.
+  const reachNow = win === 7 ? data.range.last7.reach : win === "all" ? data.lifetime.reach : sumK(cur, "reach");
+  const reachPrior = win === 7 ? data.range.prior7.reach : sumK(prior, "reach");
+  const freqNow = win === 7 ? data.range.last7.frequency : win === "all" ? data.lifetime.frequency : sumK(cur, "impressions") / Math.max(1, sumK(cur, "reach"));
+  const freqPrior = win === 7 ? data.range.prior7.frequency : sumK(prior, "impressions") / Math.max(1, sumK(prior, "reach"));
+  const tilde = approxReach ? "~" : "";
+
+  // Mini-graphs for the selected window, with current-vs-prior-period deltas.
+  // `good` = is an increase good? `headline` = period total/value, `format` = per-day labels.
   const graphs: { label: string; series: number[]; delta: number; good: boolean; headline: string; format: (v: number) => string }[] = [
-    { label: "Spend", series: last7.map((r) => r.spend), delta: delta(sumK(last7, "spend"), sumK(prior7, "spend")), good: true, headline: fmt(sumK(last7, "spend")), format: fmt },
-    { label: "Revenue", series: last7.map((r) => r.revenue), delta: delta(sumK(last7, "revenue"), sumK(prior7, "revenue")), good: true, headline: fmt(sumK(last7, "revenue")), format: fmt },
-    { label: "Impressions", series: last7.map((r) => r.impressions), delta: delta(sumK(last7, "impressions"), sumK(prior7, "impressions")), good: true, headline: formatInt(sumK(last7, "impressions")), format: compact },
-    { label: "Clicks", series: last7.map((r) => r.clicks), delta: delta(sumK(last7, "clicks"), sumK(prior7, "clicks")), good: true, headline: formatInt(sumK(last7, "clicks")), format: compact },
-    { label: "Conversions", series: last7.map((r) => r.conversions), delta: delta(sumK(last7, "conversions"), sumK(prior7, "conversions")), good: true, headline: formatInt(sumK(last7, "conversions")), format: compact },
-    { label: "ROAS", series: last7.map((r) => (r.spend > 0 ? r.revenue / r.spend : 0)), delta: delta(roas7, sumK(prior7, "revenue") / Math.max(1, sumK(prior7, "spend"))), good: true, headline: formatRoas(roas7), format: (v) => `${v.toFixed(1)}×` },
-    { label: "CPM", series: last7.map((r) => (r.impressions > 0 ? (r.spend / r.impressions) * 1000 : 0)), delta: delta(sumK(last7, "spend") / Math.max(1, sumK(last7, "impressions")), sumK(prior7, "spend") / Math.max(1, sumK(prior7, "impressions"))), good: false, headline: fmt((sumK(last7, "spend") / Math.max(1, sumK(last7, "impressions"))) * 1000), format: fmt },
-    { label: "Reach", series: last7.map((r) => r.reach), delta: delta(data.range.last7.reach, data.range.prior7.reach), good: true, headline: formatInt(data.range.last7.reach), format: compact },
-    { label: "Frequency", series: last7.map((r) => r.reach > 0 ? r.impressions / r.reach : 0), delta: delta(data.range.last7.frequency, data.range.prior7.frequency), good: false, headline: data.range.last7.frequency.toFixed(2), format: (v) => v.toFixed(2) },
+    { label: "Spend", series: cur.map((r) => r.spend), delta: delta(sumK(cur, "spend"), sumK(prior, "spend")), good: true, headline: fmt(sumK(cur, "spend")), format: fmt },
+    { label: "Revenue", series: cur.map((r) => r.revenue), delta: delta(sumK(cur, "revenue"), sumK(prior, "revenue")), good: true, headline: fmt(sumK(cur, "revenue")), format: fmt },
+    { label: "Impressions", series: cur.map((r) => r.impressions), delta: delta(sumK(cur, "impressions"), sumK(prior, "impressions")), good: true, headline: formatInt(sumK(cur, "impressions")), format: compact },
+    { label: "Clicks", series: cur.map((r) => r.clicks), delta: delta(sumK(cur, "clicks"), sumK(prior, "clicks")), good: true, headline: formatInt(sumK(cur, "clicks")), format: compact },
+    { label: "Conversions", series: cur.map((r) => r.conversions), delta: delta(sumK(cur, "conversions"), sumK(prior, "conversions")), good: true, headline: formatInt(sumK(cur, "conversions")), format: compact },
+    { label: "ROAS", series: cur.map((r) => (r.spend > 0 ? r.revenue / r.spend : 0)), delta: delta(roasCur, sumK(prior, "revenue") / Math.max(1, sumK(prior, "spend"))), good: true, headline: formatRoas(roasCur), format: (v) => `${v.toFixed(1)}×` },
+    { label: "CPM", series: cur.map((r) => (r.impressions > 0 ? (r.spend / r.impressions) * 1000 : 0)), delta: delta(sumK(cur, "spend") / Math.max(1, sumK(cur, "impressions")), sumK(prior, "spend") / Math.max(1, sumK(prior, "impressions"))), good: false, headline: fmt((sumK(cur, "spend") / Math.max(1, sumK(cur, "impressions"))) * 1000), format: fmt },
+    { label: "Reach", series: cur.map((r) => r.reach), delta: delta(reachNow, reachPrior), good: true, headline: tilde + formatInt(reachNow), format: compact },
+    { label: "Frequency", series: cur.map((r) => (r.reach > 0 ? r.impressions / r.reach : 0)), delta: delta(freqNow, freqPrior), good: false, headline: tilde + freqNow.toFixed(2), format: (v) => v.toFixed(2) },
   ];
 
   return (
@@ -129,12 +155,28 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
           </section>
 
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-ink">Last 7 days</h3>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-ink">{winLabel}</h3>
+              <select
+                value={String(win)}
+                onChange={(e) => setWin(e.target.value === "all" ? "all" : (Number(e.target.value) as WinKey))}
+                className="rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-2 py-1 text-xs text-ink outline-none focus:border-brand"
+              >
+                {WINDOWS.map((w) => (
+                  <option key={String(w.key)} value={String(w.key)}>{w.label}</option>
+                ))}
+              </select>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {graphs.map((g) => (
                 <Sparkline key={g.label} dates={dates} {...g} />
               ))}
             </div>
+            {approxReach && (
+              <p className="mt-2 text-[11px] text-muted">
+                ~ Reach &amp; Frequency for {win}-day are approximate — Meta only reports exact de-duplicated reach for 7-day and lifetime.
+              </p>
+            )}
           </section>
         </div>
 
@@ -162,6 +204,7 @@ function Sparkline({
   headline: string;
   format: (v: number) => string;
 }) {
+  const [active, setActive] = useState<number | null>(null);
   const max = Math.max(...series, 1);
   const min = Math.min(...series, 0);
   const range = max - min || 1;
@@ -176,6 +219,10 @@ function Sparkline({
   const up = delta >= 0;
   const positive = up === good;
   const anchor = (i: number) => (i === 0 ? "start" : i === series.length - 1 ? "end" : "middle");
+  // Thin labels so wider windows (15/30/lifetime) stay readable — keep ends and
+  // ~7 evenly spaced points.
+  const labelEvery = Math.max(1, Math.ceil(series.length / 7));
+  const showLabel = (i: number) => i === 0 || i === series.length - 1 || i % labelEvery === 0;
   const shortDate = (s: string) => {
     const d = new Date(s);
     return isNaN(d.getTime()) ? "" : `${d.getDate()} ${d.toLocaleString("en", { month: "short" })}`;
@@ -194,15 +241,39 @@ function Sparkline({
         <polyline points={pts} fill="none" stroke="var(--brand)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
         {coords.map((c, i) => (
           <g key={i}>
-            <circle cx={c.x} cy={c.y} r="2.2" fill="var(--brand)" />
-            <text x={c.x} y={c.y - 6} textAnchor={anchor(i)} fontSize="9" fill="var(--ink-2)" fontFamily="ui-monospace, monospace">
-              {format(series[i])}
-            </text>
-            <text x={c.x} y={h - 3} textAnchor={anchor(i)} fontSize="8.5" fill="var(--muted)">
-              {shortDate(dates[i])}
-            </text>
+            <circle cx={c.x} cy={c.y} r={active === i ? 3 : series.length > 20 ? 1.6 : 2.2}
+              fill={active === i ? "var(--brand-deep)" : "var(--brand)"} />
+            {showLabel(i) && active !== i && (
+              <>
+                <text x={c.x} y={c.y - 6} textAnchor={anchor(i)} fontSize="9" fill="var(--ink-2)" fontFamily="ui-monospace, monospace">
+                  {format(series[i])}
+                </text>
+                <text x={c.x} y={h - 3} textAnchor={anchor(i)} fontSize="8.5" fill="var(--muted)">
+                  {shortDate(dates[i])}
+                </text>
+              </>
+            )}
+            {/* invisible wide hit target — hover or tap any point for its date + value */}
+            <circle cx={c.x} cy={c.y} r="9" fill="transparent" style={{ cursor: "pointer" }}
+              onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)}
+              onClick={() => setActive((p) => (p === i ? null : i))} />
           </g>
         ))}
+        {active !== null && (() => {
+          const c = coords[active];
+          const l1 = shortDate(dates[active]);
+          const l2 = format(series[active]);
+          const tw = Math.max(l1.length, l2.length) * 5.4 + 12;
+          const tx = Math.min(Math.max(c.x - tw / 2, 1), w - tw - 1);
+          const ty = c.y - 30 < 1 ? c.y + 8 : c.y - 30;
+          return (
+            <g pointerEvents="none">
+              <rect x={tx} y={ty} width={tw} height={26} rx="4" fill="var(--surface)" stroke="var(--line)" />
+              <text x={tx + tw / 2} y={ty + 10} textAnchor="middle" fontSize="8" fill="var(--muted)">{l1}</text>
+              <text x={tx + tw / 2} y={ty + 20} textAnchor="middle" fontSize="9.5" fill="var(--ink)" fontFamily="ui-monospace, monospace">{l2}</text>
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );

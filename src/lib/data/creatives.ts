@@ -236,11 +236,12 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
     from ad_metrics where ad_id = ${adId}`;
   const ranges = await sqlClient`
     select range, reach, frequency from ad_range_metrics where ad_id = ${adId}`;
-  // Last 14 days the ad actually delivered (Meta returns no row for zero-delivery
-  // days). For a paused ad this is the final active window before it paused — we
-  // deliberately show "the last 7 days it was active," not a flat calendar tail.
+  // Daily rows the ad actually delivered (Meta returns no row for zero-delivery
+  // days), newest first. We pull a long history so the ad view can re-window to
+  // 7 / 15 / 30 days or lifetime client-side; for a paused ad these are the days
+  // it was active, not a flat calendar tail.
   const daily = await sqlClient`
-    select * from ad_metrics where ad_id = ${adId} order by as_of_date desc limit 14`;
+    select * from ad_metrics where ad_id = ${adId} order by as_of_date desc limit 400`;
   const log = await sqlClient`
     select l.text, l.created_at, u.name as author
     from ad_decision_log l join users u on u.id = l.author_id
