@@ -88,21 +88,24 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
   const windows = winLabels(data.daily);
   const winLabel = windows.find((w) => w.key === win)!.label;
 
-  // Calendar windows ending today: non-delivery days are drawn as zeros, so the
-  // 15/30-day charts always show the full stretch with the gaps visible.
-  // Lifetime spans the ad's own first→last delivery (padded the same way).
+  // Windows END on the ad's last delivery day, not today — for a paused ad that
+  // means its final active week/fortnight rather than a flat line of zeros
+  // stretching to now. Within the window, days it didn't deliver are real zeros
+  // (Meta omits those rows), so the gaps stay visible.
   const today = ymd(new Date());
+  const lastActive = data.daily.length ? data.daily[data.daily.length - 1].asOfDate : today;
+  const isStale = lastActive < today;
   const { cur, prior } = (() => {
     if (win === "all") {
       if (data.daily.length === 0) return { cur: [] as Daily[], prior: [] as Daily[] };
       return {
-        cur: calendarWindow(data.daily, data.daily[0].asOfDate, data.daily[data.daily.length - 1].asOfDate),
+        cur: calendarWindow(data.daily, data.daily[0].asOfDate, lastActive),
         prior: [] as Daily[],
       };
     }
-    const from = shiftDays(today, -(win - 1));
+    const from = shiftDays(lastActive, -(win - 1));
     return {
-      cur: calendarWindow(data.daily, from, today),
+      cur: calendarWindow(data.daily, from, lastActive),
       prior: calendarWindow(data.daily, shiftDays(from, -win), shiftDays(from, -1)),
     };
   })();
@@ -231,8 +234,7 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
                   {cur.length === 0
                     ? "No delivery recorded"
                     : `${fmtDate(cur[0].asOfDate)} – ${fmtDate(cur[cur.length - 1].asOfDate)} · delivered on ${daysWithDelivery} of ${cur.length} day${cur.length === 1 ? "" : "s"}`}
-                  {daysWithDelivery === 0 && cur.length > 0 && data.daily.length > 0 &&
-                    ` · last ran ${fmtDate(data.daily[data.daily.length - 1].asOfDate)}`}
+                  {isStale && cur.length > 0 && " · last active period (ad has since stopped)"}
                 </p>
               </div>
               <select
