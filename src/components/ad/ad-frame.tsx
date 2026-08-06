@@ -20,26 +20,57 @@ const BANNER_TONE: Record<string, string> = {
 type WinKey = 7 | 15 | 30 | "all";
 const WIN_KEYS: WinKey[] = [7, 15, 30, "all"];
 
+type Daily = AdFrameData["daily"][number];
+
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const shiftDays = (iso: string, by: number) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + by);
+  return ymd(d);
+};
+const zeroDay = (asOfDate: string): Daily => ({
+  asOfDate, spend: 0, revenue: 0, impressions: 0, reach: 0,
+  clicks: 0, conversions: 0, thumbstop: null, hold: null,
+});
+
 /**
- * Label each window with the days of data behind it, so "Lifetime" reads
- * "Lifetime · 13 days" and a short-lived ad shows "Last 15 days · only 5 with
- * data" instead of silently plotting five points under a 15-day heading.
+ * Calendar window: every date from..to inclusive, filling days the ad didn't
+ * deliver with zeros (Meta returns no row at all for those). So "Last 15 days"
+ * always plots 15 points — the flat stretches ARE the story (paused, budget
+ * exhausted) instead of a chart that silently looks short.
  */
-function winLabels(totalDays: number): { key: WinKey; label: string; short: string }[] {
+function calendarWindow(daily: Daily[], from: string, to: string): Daily[] {
+  if (from > to) return [];
+  const byDate = new Map(daily.map((d) => [d.asOfDate, d]));
+  const out: Daily[] = [];
+  for (let day = from; day <= to; day = shiftDays(day, 1)) {
+    out.push(byDate.get(day) ?? zeroDay(day));
+  }
+  return out;
+}
+
+/** Lifetime = first→last delivery span (its actual run), in days. */
+function lifetimeSpan(daily: Daily[]): number {
+  if (daily.length === 0) return 0;
+  const first = daily[0].asOfDate;
+  const last = daily[daily.length - 1].asOfDate;
+  return Math.round(
+    (new Date(`${last}T00:00:00`).getTime() - new Date(`${first}T00:00:00`).getTime()) / 86400000,
+  ) + 1;
+}
+
+function winLabels(daily: Daily[]): { key: WinKey; label: string; short: string }[] {
+  const span = lifetimeSpan(daily);
   return WIN_KEYS.map((key) => {
     if (key === "all") {
       return {
         key,
-        label: `Lifetime · ${totalDays} day${totalDays === 1 ? "" : "s"}`,
-        short: `Lifetime (${totalDays}d)`,
+        label: `Lifetime · ran ${span} day${span === 1 ? "" : "s"}`,
+        short: `Lifetime (${span}d)`,
       };
     }
-    const have = Math.min(key, totalDays);
-    return {
-      key,
-      label: have < key ? `Last ${key} days · only ${have} with data` : `Last ${key} days`,
-      short: have < key ? `Last ${key} days (${have}d)` : `Last ${key} days`,
-    };
+    return { key, label: `Last ${key} days`, short: `Last ${key} days` };
   });
 }
 
@@ -54,11 +85,28 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
   // Selected trend window (7 / 15 / 30 days or lifetime), re-windowed client-side
   // from the full daily history.
   const [win, setWin] = useState<WinKey>(7);
-  const windows = winLabels(data.daily.length);
+  const windows = winLabels(data.daily);
   const winLabel = windows.find((w) => w.key === win)!.label;
-  const n = win === "all" ? data.daily.length : Math.min(win, data.daily.length);
-  const cur = data.daily.slice(-n);
-  const prior = win === "all" ? [] : data.daily.slice(-2 * n, -n);
+
+  // Calendar windows ending today: non-delivery days are drawn as zeros, so the
+  // 15/30-day charts always show the full stretch with the gaps visible.
+  // Lifetime spans the ad's own first→last delivery (padded the same way).
+  const today = ymd(new Date());
+  const { cur, prior } = (() => {
+    if (win === "all") {
+      if (data.daily.length === 0) return { cur: [] as Daily[], prior: [] as Daily[] };
+      return {
+        cur: calendarWindow(data.daily, data.daily[0].asOfDate, data.daily[data.daily.length - 1].asOfDate),
+        prior: [] as Daily[],
+      };
+    }
+    const from = shiftDays(today, -(win - 1));
+    return {
+      cur: calendarWindow(data.daily, from, today),
+      prior: calendarWindow(data.daily, shiftDays(from, -win), shiftDays(from, -1)),
+    };
+  })();
+  const daysWithDelivery = cur.filter((r) => r.spend > 0 || r.impressions > 0).length;
   // Reach/frequency are de-duplicated by Meta and NOT summable — exact only for
   // 7-day and lifetime; 15/30 fall back to an approximation (marked with ~).
   const approxReach = win === 15 || win === 30;
@@ -175,7 +223,18 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
 
           <section>
             <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-ink">{winLabel}</h3>
+              <div>
+                <h3 className="text-sm font-semibold text-ink">{winLabel}</h3>
+                {/* Charts plot every calendar day in the window; days with no
+                    delivery are real zeros. Spell out how many actually ran. */}
+                <p className="text-[11px] text-muted">
+                  {cur.length === 0
+                    ? "No delivery recorded"
+                    : `${fmtDate(cur[0].asOfDate)} – ${fmtDate(cur[cur.length - 1].asOfDate)} · delivered on ${daysWithDelivery} of ${cur.length} day${cur.length === 1 ? "" : "s"}`}
+                  {daysWithDelivery === 0 && cur.length > 0 && data.daily.length > 0 &&
+                    ` · last ran ${fmtDate(data.daily[data.daily.length - 1].asOfDate)}`}
+                </p>
+              </div>
               <select
                 value={String(win)}
                 onChange={(e) => setWin(e.target.value === "all" ? "all" : (Number(e.target.value) as WinKey))}
