@@ -18,12 +18,30 @@ const BANNER_TONE: Record<string, string> = {
 };
 
 type WinKey = 7 | 15 | 30 | "all";
-const WINDOWS: { key: WinKey; label: string }[] = [
-  { key: 7, label: "Last 7 days" },
-  { key: 15, label: "Last 15 days" },
-  { key: 30, label: "Last 30 days" },
-  { key: "all", label: "Lifetime" },
-];
+const WIN_KEYS: WinKey[] = [7, 15, 30, "all"];
+
+/**
+ * Label each window with the days of data behind it, so "Lifetime" reads
+ * "Lifetime · 13 days" and a short-lived ad shows "Last 15 days · only 5 with
+ * data" instead of silently plotting five points under a 15-day heading.
+ */
+function winLabels(totalDays: number): { key: WinKey; label: string; short: string }[] {
+  return WIN_KEYS.map((key) => {
+    if (key === "all") {
+      return {
+        key,
+        label: `Lifetime · ${totalDays} day${totalDays === 1 ? "" : "s"}`,
+        short: `Lifetime (${totalDays}d)`,
+      };
+    }
+    const have = Math.min(key, totalDays);
+    return {
+      key,
+      label: have < key ? `Last ${key} days · only ${have} with data` : `Last ${key} days`,
+      short: have < key ? `Last ${key} days (${have}d)` : `Last ${key} days`,
+    };
+  });
+}
 
 export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions }) {
   const router = useRouter();
@@ -36,7 +54,8 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
   // Selected trend window (7 / 15 / 30 days or lifetime), re-windowed client-side
   // from the full daily history.
   const [win, setWin] = useState<WinKey>(7);
-  const winLabel = WINDOWS.find((w) => w.key === win)!.label;
+  const windows = winLabels(data.daily.length);
+  const winLabel = windows.find((w) => w.key === win)!.label;
   const n = win === "all" ? data.daily.length : Math.min(win, data.daily.length);
   const cur = data.daily.slice(-n);
   const prior = win === "all" ? [] : data.daily.slice(-2 * n, -n);
@@ -162,8 +181,8 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
                 onChange={(e) => setWin(e.target.value === "all" ? "all" : (Number(e.target.value) as WinKey))}
                 className="rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-2 py-1 text-xs text-ink outline-none focus:border-brand"
               >
-                {WINDOWS.map((w) => (
-                  <option key={String(w.key)} value={String(w.key)}>{w.label}</option>
+                {windows.map((w) => (
+                  <option key={String(w.key)} value={String(w.key)}>{w.short}</option>
                 ))}
               </select>
             </div>

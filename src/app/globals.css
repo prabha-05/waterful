@@ -98,6 +98,18 @@
   --control-border: #33414f;
 }
 
+/* Native <select> popup lists don't inherit the app tokens — style them
+   explicitly so the dropdown is dark in dark theme (white by default on
+   Windows Chrome). Uses tokens, so light theme stays correct too. */
+select,
+option {
+  color-scheme: inherit;
+}
+option {
+  background-color: var(--surface);
+  color: var(--ink);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
