@@ -297,9 +297,17 @@ export async function linkAd(
     // First ad linked → creative goes Live (status auto-derives, §7 constraints).
     await db.update(creatives).set({ status: "live" }).where(eq(creatives.id, creativeId));
   } catch (e) {
-    // Never crash the page — surface a friendly error in the modal instead.
-    console.log(`[linkAd] failed for ad ${adId}: ${(e as Error)?.message ?? e}`);
-    return { ok: false, error: "Couldn't pull data for that Ad ID. Please try again." };
+    // Never crash the page — surface the real reason so a broken token isn't
+    // mistaken for a bad Ad ID (and is never papered over with fake data).
+    const msg = (e as Error)?.message ?? String(e);
+    console.log(`[linkAd] failed for ad ${adId}: ${msg}`);
+    const isConfig = /META_ACCESS_TOKEN|OAuth|token|expired|session/i.test(msg);
+    return {
+      ok: false,
+      error: isConfig
+        ? "Meta connection isn't working — the access token is missing or expired. Ask an admin to fix it, then link again."
+        : `Couldn't pull data for that Ad ID: ${msg}`,
+    };
   }
 
   revalidateLoop();

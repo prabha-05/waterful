@@ -4,28 +4,31 @@ import type { MetaPull } from "./types";
 export type { MetaActivation, MetaDaily, MetaRange, MetaPull } from "./types";
 
 /**
- * Active Meta provider. Uses the real Meta Marketing API when META_ACCESS_TOKEN
- * is set; otherwise the deterministic mock (decisions §10). The real provider
- * (lib/meta/real.ts) implements the same signature, so swapping is env-only.
+ * Active Meta provider.
+ *
+ * NEVER silently substitutes simulated data: an ad that fails to pull must fail
+ * loudly, because fabricated spend/ROAS in the Library is worse than no ad at
+ * all (2026-08: five ads were linked against a broken token and showed ~₹11L of
+ * invented spend at 2–3× ROAS for weeks).
+ *
+ * The deterministic mock (decisions §10) is opt-in for local development only,
+ * via META_USE_MOCK=1 — it is never reachable by accident in production.
  */
+const USE_MOCK = process.env.META_USE_MOCK === "1";
+
 export async function fetchMetaData(
   adId: string,
   opts: { isVideo: boolean; since?: Date },
 ): Promise<MetaPull> {
-  if (process.env.META_ACCESS_TOKEN) {
-    try {
-      const { fetchMetaData: fetchReal } = await import("./real");
-      return await fetchReal(adId, opts);
-    } catch (err) {
-      // Token expired/invalid or the ad isn't in this account → don't hard-fail the
-      // link/sync; fall back to the deterministic mock so the flow still works.
-      // Logged loudly so simulated data is never mistaken for real Meta data.
-      console.log(
-        `[meta] real provider failed for ad ${adId}: ${(err as Error).message}. ` +
-          `Falling back to MOCK (simulated) data.`,
-      );
-      return fetchMock(adId, opts);
-    }
+  if (USE_MOCK) return fetchMock(adId, opts);
+
+  if (!process.env.META_ACCESS_TOKEN) {
+    throw new Error(
+      "META_ACCESS_TOKEN is not set — cannot pull real Meta data. " +
+        "Set the token (or META_USE_MOCK=1 for local development with simulated data).",
+    );
   }
-  return fetchMock(adId, opts);
+
+  const { fetchMetaData: fetchReal } = await import("./real");
+  return fetchReal(adId, opts); // errors propagate — the caller surfaces them
 }
