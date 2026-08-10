@@ -14,10 +14,13 @@ export default async function LibraryPage() {
   ]);
   const perms = user!.permissions;
 
-  // Resolve signed thumbnail URLs for the cards (private bucket).
-  const urlMap = await signPaths(
-    baseCreatives.map((c) => c.thumbPath).filter((p): p is string => !!p),
-  );
+  // Resolve signed thumbnail URLs for the cards (private bucket). Cards with a
+  // poster only need that small JPEG; the rest also get the source file signed
+  // so the card can capture a frame once and heal the missing poster.
+  const urlMap = await signPaths([
+    ...baseCreatives.map((c) => c.thumbPath).filter((p): p is string => !!p),
+    ...baseCreatives.filter((c) => !c.hasPoster).map((c) => c.sourcePath).filter((p): p is string => !!p),
+  ]);
   const creatives = baseCreatives.map((c) => ({
     ...c,
     thumbUrl: c.thumbPath ? (urlMap.get(c.thumbPath) ?? null) : null,

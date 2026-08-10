@@ -27,14 +27,38 @@ export function CreativeCardView({
         {card.thumbUrl ? (
           card.type === "Video" ? (
             <>
-              <VideoThumb src={card.thumbUrl} alt={card.title} className="h-full w-full object-cover" />
+              {card.hasPoster ? (
+                // Poster stored server-side — a small JPEG, no video fetched.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={card.thumbUrl}
+                  alt={card.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <VideoThumb
+                  src={card.thumbUrl}
+                  alt={card.title}
+                  cacheKey={card.sourcePath ?? undefined}
+                  storagePath={card.sourcePath}
+                  className="h-full w-full object-cover"
+                />
+              )}
               <span className="absolute flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white">
                 ▶
               </span>
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={card.thumbUrl} alt={card.title} className="h-full w-full object-cover" />
+            <img
+              src={card.thumbUrl}
+              alt={card.title}
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
           )
         ) : (
           <span className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-2/70">

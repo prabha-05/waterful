@@ -13,10 +13,12 @@ export default async function AwaitingPage() {
 
   const [baseAwaiting, taxonomy] = await Promise.all([getAwaiting(), getTaxonomy()]);
 
-  // Resolve signed thumbnail URLs for the rows (private bucket), same as Library.
-  const urlMap = await signPaths(
-    baseAwaiting.map((c) => c.thumbPath).filter((p): p is string => !!p),
-  );
+  // Resolve signed thumbnail URLs for the rows (private bucket), same as Library:
+  // the poster when present, plus the source file for cards still lacking one.
+  const urlMap = await signPaths([
+    ...baseAwaiting.map((c) => c.thumbPath).filter((p): p is string => !!p),
+    ...baseAwaiting.filter((c) => !c.hasPoster).map((c) => c.sourcePath).filter((p): p is string => !!p),
+  ]);
   const awaiting = baseAwaiting.map((c) => ({
     ...c,
     thumbUrl: c.thumbPath ? (urlMap.get(c.thumbPath) ?? null) : null,

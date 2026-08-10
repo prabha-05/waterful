@@ -39,7 +39,7 @@ export async function createCreative(data: {
   reviewLink: string;
   reviewSummary: string;
   personaIds: string[];
-  files: { storagePath: string; position: number }[];
+  files: { storagePath: string; position: number; posterPath?: string | null }[];
 }): Promise<ActionResult> {
   let user;
   try {
@@ -85,6 +85,7 @@ export async function createCreative(data: {
     data.files.map((f) => ({
       creativeId: created.id,
       storagePath: f.storagePath,
+      posterPath: f.posterPath ?? null,
       position: f.position,
     })),
   );
@@ -218,6 +219,54 @@ export async function deleteCreative(creativeId: string): Promise<ActionResult> 
 
   revalidateLoop();
   return { ok: true, id: creativeId };
+}
+
+/**
+ * Store a captured video poster so future viewers get a small JPEG instead of
+ * downloading the video. Called by the card after it captures frame 0 for a
+ * file that has no poster yet (self-healing backfill for pre-2026-08 uploads).
+ * `upload`-gated because it writes to Storage; a no-op if one already exists.
+ */
+export async function savePoster(
+  storagePath: string,
+  posterDataUrl: string,
+): Promise<ActionResult> {
+  try {
+    await requirePermission("upload");
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!posterDataUrl.startsWith("data:image/jpeg;base64,"))
+    return { ok: false, error: "Expected a JPEG data URL." };
+
+  const [file] = await db
+    .select({ id: creativeFiles.id, poster: creativeFiles.posterPath })
+    .from(creativeFiles)
+    .where(eq(creativeFiles.storagePath, storagePath));
+  if (!file) return { ok: false, error: "File not found." };
+  if (file.poster) return { ok: true, id: file.id }; // already healed
+
+  const base64 = posterDataUrl.slice("data:image/jpeg;base64,".length);
+  const bytes = Buffer.from(base64, "base64");
+  if (bytes.byteLength > 400_000) return { ok: false, error: "Poster too large." };
+
+  const posterPath = `${storagePath.replace(/\.[^./]+$/, "")}_poster.jpg`;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.storage
+      .from("creatives")
+      .upload(posterPath, bytes, { contentType: "image/jpeg", upsert: true });
+    if (error) return { ok: false, error: error.message };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  await db
+    .update(creativeFiles)
+    .set({ posterPath })
+    .where(eq(creativeFiles.id, file.id));
+  revalidateLoop();
+  return { ok: true, id: file.id };
 }
 
 /** Link a Meta Ad ID → on-link lifetime backfill (mock) → Draft becomes Live (§6, §8). */

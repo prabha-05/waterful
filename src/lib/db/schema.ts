@@ -202,6 +202,9 @@ export const creativeFiles = pgTable("creative_files", {
     .notNull()
     .references(() => creatives.id, { onDelete: "cascade" }),
   storagePath: text("storage_path").notNull(),
+  // Small JPEG still for video cards — avoids downloading the video to draw a
+  // thumbnail. Captured at upload; back-filled on first view for older files.
+  posterPath: text("poster_path"),
   position: integer("position").notNull().default(0),
 });
 

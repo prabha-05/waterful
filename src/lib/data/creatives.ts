@@ -18,8 +18,10 @@ export type CreativeCard = {
   revenue: number;
   roas: number;
   score: number;
-  thumbPath: string | null; // first creative_files path (signed → URL in the page)
+  thumbPath: string | null; // poster if present, else the file (signed in the page)
   thumbUrl?: string | null; // resolved signed URL (set in the page, not the query)
+  sourcePath: string | null; // the actual file — used to heal a missing poster
+  hasPoster: boolean; // false → card captures a frame and stores it once
 };
 
 /**
@@ -57,6 +59,8 @@ function toCard(r: Record<string, unknown>): CreativeCard {
     roas,
     score: creativeScore(spend, roas),
     thumbPath: (r.thumb_path as string | null) ?? null,
+    sourcePath: (r.source_path as string | null) ?? null,
+    hasPoster: r.has_poster === true,
   };
 }
 
@@ -68,7 +72,10 @@ export async function listCreatives(): Promise<CreativeCard[]> {
            coalesce(string_agg(distinct p.label, '||') filter (where p.label is not null), '') as personas,
            (select count(*)::int from ad_activations aa where aa.creative_id = c.id) as ad_count,
            (select string_agg(distinct aa.status::text, ',') from ad_activations aa where aa.creative_id = c.id) as ad_statuses,
-           (select storage_path from creative_files cf where cf.creative_id = c.id order by position limit 1) as thumb_path,
+           -- Prefer the small poster JPEG; fall back to the file itself.
+           (select coalesce(cf.poster_path, cf.storage_path) from creative_files cf where cf.creative_id = c.id order by position limit 1) as thumb_path,
+           (select cf.storage_path from creative_files cf where cf.creative_id = c.id order by position limit 1) as source_path,
+           (select cf.poster_path is not null from creative_files cf where cf.creative_id = c.id order by position limit 1) as has_poster,
            coalesce(m.spend, 0) as spend, coalesce(m.revenue, 0) as revenue
     from creatives c
     join types t on t.id = c.type_id

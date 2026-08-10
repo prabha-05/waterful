@@ -14,6 +14,53 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 
+/**
+ * Grab frame 0 of a video file as a small JPEG, entirely in the browser (the
+ * file is already local, so this costs no bandwidth). Stored alongside the
+ * video so Library cards render a ~20KB still instead of fetching the video.
+ */
+function capturePoster(file: File, maxWidth = 320): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    let settled = false;
+    const finish = (blob: Blob | null) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.onloadeddata = () => {
+      try {
+        video.currentTime = 0.1;
+      } catch {
+        finish(null);
+      }
+    };
+    video.onseeked = () => {
+      try {
+        const scale = Math.min(1, maxWidth / (video.videoWidth || maxWidth));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round((video.videoWidth || maxWidth) * scale);
+        canvas.height = Math.round((video.videoHeight || maxWidth) * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return finish(null);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((b) => finish(b), "image/jpeg", 0.6);
+      } catch {
+        finish(null);
+      }
+    };
+    video.onerror = () => finish(null);
+    setTimeout(() => finish(null), 15000); // never hold up the upload
+    video.src = url;
+  });
+}
+
 export function UploadButton({ taxonomy }: { taxonomy: Taxonomy }) {
   const [open, setOpen] = useState(false);
   return (
@@ -81,7 +128,7 @@ function UploadModal({
       // so large UGC video never hits the Server Action body limit.
       const supabase = createSupabaseBrowserClient();
       const folder = crypto.randomUUID();
-      const uploaded: { storagePath: string; position: number }[] = [];
+      const uploaded: { storagePath: string; position: number; posterPath?: string | null }[] = [];
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -93,7 +140,21 @@ function UploadModal({
           setError(`File upload failed: ${error.message}`);
           return;
         }
-        uploaded.push({ storagePath: path, position: i });
+
+        // Video: also store a small still, so Library cards never download the
+        // video just to show a thumbnail. Best-effort — never blocks the upload.
+        let posterPath: string | null = null;
+        if (f.type.startsWith("video/")) {
+          const blob = await capturePoster(f).catch(() => null);
+          if (blob) {
+            const pPath = `${path.replace(/\.[^./]+$/, "")}_poster.jpg`;
+            const { error: pErr } = await supabase.storage
+              .from("creatives")
+              .upload(pPath, blob, { contentType: "image/jpeg", upsert: true });
+            if (!pErr) posterPath = pPath;
+          }
+        }
+        uploaded.push({ storagePath: path, position: i, posterPath });
       }
 
       const res = await createCreative({
