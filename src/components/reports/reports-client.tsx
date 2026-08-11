@@ -5,17 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { BreakdownRow, ReportData } from "@/lib/data/reports";
 import { formatInt, formatRoas } from "@/lib/format";
-import { Button } from "@/components/ui/primitives";
 import { useFormat } from "@/components/providers/settings-provider";
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-const shift = (iso: string, days: number) => {
-  const d = new Date(`${iso}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return ymd(d);
-};
 
 // Age buckets read better in order; everything else ranks by spend.
 const AGE_ORDER = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+", "unknown", "Unknown"];
@@ -43,17 +36,6 @@ export function ReportsClient({
       router.push(`/reports?from=${nextFrom}&to=${nextTo}`, { scroll: false });
     });
   };
-
-  // Presets anchor to the last day we hold data for, so "Last 7 days" means the
-  // last 7 days of DELIVERY rather than a window that may be half empty.
-  const anchor = bounds?.max ?? ymd(new Date());
-  const presets: { label: string; from: string; to: string }[] = [
-    { label: "Last 7 days", from: shift(anchor, -6), to: anchor },
-    { label: "Last 30 days", from: shift(anchor, -29), to: anchor },
-    { label: "Last 90 days", from: shift(anchor, -89), to: anchor },
-    { label: "All time", from: bounds?.min ?? anchor, to: anchor },
-  ];
-  const activePreset = presets.find((p) => p.from === data.range.from && p.to === data.range.to)?.label;
 
   const t = data.totals;
   const kpis = [
@@ -96,18 +78,6 @@ export function ReportsClient({
               className="rounded-[var(--radius-control)] border border-line-2 bg-surface-2 px-3 py-2 text-sm text-ink [color-scheme:dark]"
             />
           </label>
-
-          <div className="flex flex-wrap gap-2">
-            {presets.map((p) => (
-              <Button
-                key={p.label}
-                variant={activePreset === p.label ? "primary" : "ghost"}
-                onClick={() => apply(p.from, p.to)}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
         </div>
 
         <p className="mt-3 text-[11px] text-muted">
@@ -185,8 +155,7 @@ function sortAgeGender(rows: BreakdownRow[]) {
 // ---------------------------------------------------------------------------
 type SortKey = "spend" | "revenue" | "roas" | "purchases" | "clicks" | "ctr" | "title";
 
-const AD_GRID =
-  "grid-cols-[minmax(180px,2fr)_84px_92px_66px_78px_78px_66px_92px]";
+const AD_GRID = "grid-cols-[minmax(180px,2fr)_92px_100px_70px_84px_84px_72px]";
 
 function AdTable({ data }: { data: ReportData }) {
   const fmt = useFormat();
@@ -227,11 +196,6 @@ function AdTable({ data }: { data: ReportData }) {
           Every ad in this range{" "}
           <span className="font-normal text-muted">· {rows.length}</span>
         </h3>
-        {data.hasShopify && (
-          <span className="text-[11px] text-muted">
-            Shopify column = orders tagged to that ad
-          </span>
-        )}
       </div>
 
       <div className="overflow-x-auto rounded-[var(--radius-control)] border border-line bg-surface">
@@ -249,7 +213,6 @@ function AdTable({ data }: { data: ReportData }) {
                 {sort === h.key && <span className="text-brand">{asc ? "▲" : "▼"}</span>}
               </button>
             ))}
-            <span className="text-right">{data.hasShopify ? "Shopify" : "CPA"}</span>
           </div>
 
           {rows.map((r) => (
@@ -276,15 +239,6 @@ function AdTable({ data }: { data: ReportData }) {
               <span className="text-right font-mono text-ink-3">{formatInt(r.purchases)}</span>
               <span className="text-right font-mono text-ink-3">{formatInt(r.clicks)}</span>
               <span className="text-right font-mono text-ink-3">{r.ctr.toFixed(2)}%</span>
-              <span className="text-right font-mono text-ink-3">
-                {data.hasShopify
-                  ? r.trackedRevenue > 0
-                    ? fmt(r.trackedRevenue)
-                    : "—"
-                  : r.purchases > 0
-                    ? fmt(r.cpa)
-                    : "—"}
-              </span>
             </Link>
           ))}
         </div>
