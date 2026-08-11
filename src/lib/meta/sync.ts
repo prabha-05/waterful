@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   adActivations,
+  adDemographicMetrics,
   adMetrics,
   adRangeMetrics,
   creatives,
@@ -96,6 +97,26 @@ export async function runMetaSync(
             reach: r.reach,
             frequency: String(r.frequency),
             asOfDate: new Date().toISOString().slice(0, 10),
+          })),
+        );
+      }
+
+      // Audience breakdowns: replace (a snapshot of the pulled window).
+      await db.delete(adDemographicMetrics).where(eq(adDemographicMetrics.adId, ad.adId));
+      if (pull.demographics.length > 0) {
+        await db.insert(adDemographicMetrics).values(
+          pull.demographics.map((d) => ({
+            adId: ad.adId,
+            dimension: d.dimension,
+            segment: d.segment,
+            spend: String(d.spend),
+            revenue: String(d.revenue),
+            impressions: d.impressions,
+            clicks: d.clicks,
+            conversions: d.conversions,
+            reach: d.reach,
+            window,
+            syncedAt: new Date(),
           })),
         );
       }

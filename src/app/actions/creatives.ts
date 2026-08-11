@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import {
   adActivations,
   adDecisionLog,
+  adDemographicMetrics,
   adMetrics,
   adRangeMetrics,
   creativeFiles,
@@ -328,6 +329,23 @@ export async function linkAd(
           reach: d.reach,
           thumbstop: d.thumbstop === null ? null : String(d.thumbstop),
           hold: d.hold === null ? null : String(d.hold),
+        })),
+      );
+    }
+    if (pull.demographics.length > 0) {
+      await db.insert(adDemographicMetrics).values(
+        pull.demographics.map((d) => ({
+          adId,
+          dimension: d.dimension,
+          segment: d.segment,
+          spend: String(d.spend),
+          revenue: String(d.revenue),
+          impressions: d.impressions,
+          clicks: d.clicks,
+          conversions: d.conversions,
+          reach: d.reach,
+          window: "full",
+          syncedAt: new Date(),
         })),
       );
     }

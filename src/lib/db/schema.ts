@@ -272,6 +272,67 @@ export const adRangeMetrics = pgTable(
   (t) => [primaryKey({ columns: [t.adId, t.range] })],
 );
 
+// Audience breakdowns per ad (age / gender / age_gender / region). Replaced on
+// every sync — a snapshot of "who this creative reached", not a daily series.
+// Region carries spend + impressions only: Meta attributes no revenue by region.
+export const adDemographicMetrics = pgTable(
+  "ad_demographic_metrics",
+  {
+    adId: text("ad_id")
+      .notNull()
+      .references(() => adActivations.metaAdId, { onDelete: "cascade" }),
+    dimension: text("dimension").notNull(), // age | gender | age_gender | region
+    segment: text("segment").notNull(), // "35-44" | "male" | "35-44 male" | "Maharashtra"
+    spend: numeric("spend", { precision: 14, scale: 2 }).notNull().default("0"),
+    revenue: numeric("revenue", { precision: 14, scale: 2 }).notNull().default("0"),
+    impressions: bigint("impressions", { mode: "number" }).notNull().default(0),
+    clicks: bigint("clicks", { mode: "number" }).notNull().default(0),
+    conversions: bigint("conversions", { mode: "number" }).notNull().default(0),
+    reach: bigint("reach", { mode: "number" }).notNull().default(0),
+    window: text("window").notNull().default("28d"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.adId, t.dimension, t.segment] })],
+);
+
+/**
+ * Shopify revenue by region and day, store-wide. Meta strips conversion values
+ * from any geographic breakdown, so the store's own orders are the only source
+ * of truth for where sales actually come from.
+ */
+export const shopifyRegionalRevenue = pgTable(
+  "shopify_regional_revenue",
+  {
+    asOfDate: date("as_of_date").notNull(),
+    region: text("region").notNull(), // normalised to Meta's region naming
+    orders: integer("orders").notNull().default(0),
+    revenue: numeric("revenue", { precision: 14, scale: 2 }).notNull().default("0"),
+    paidOrders: integer("paid_orders").notNull().default(0),
+    paidRevenue: numeric("paid_revenue", { precision: 14, scale: 2 }).notNull().default("0"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.asOfDate, t.region] })],
+);
+
+/**
+ * Revenue attributed to ONE ad: Shopify orders that arrived carrying
+ * utm_content={{ad.id}}. Measured last-click, unlike Meta's modelled conversion
+ * value — and unlike Meta it survives a region breakdown, which is the whole
+ * point. No FK to ad_activations: ads can be attributed before being linked.
+ */
+export const shopifyAdRevenue = pgTable(
+  "shopify_ad_revenue",
+  {
+    adId: text("ad_id").notNull(),
+    asOfDate: date("as_of_date").notNull(),
+    region: text("region").notNull(),
+    orders: integer("orders").notNull().default(0),
+    revenue: numeric("revenue", { precision: 14, scale: 2 }).notNull().default("0"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.adId, t.asOfDate, t.region] })],
+);
+
 export const adDecisionLog = pgTable("ad_decision_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   adId: text("ad_id")

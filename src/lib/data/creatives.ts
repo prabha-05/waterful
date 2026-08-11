@@ -224,6 +224,24 @@ export type AdFrameData = {
     last7: { reach: number; frequency: number };
     prior7: { reach: number; frequency: number };
   };
+  demographics: {
+    dimension: string; // age | gender | age_gender | region
+    segment: string;
+    spend: number;
+    revenue: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    reach: number;
+  }[];
+  /**
+   * THIS ad's revenue by region, from Shopify orders that arrived carrying
+   * utm_content={{ad.id}}. Real orders, not Meta's modelled conversion value —
+   * but last-click only, so orders that lost the UTM are missing (see
+   * trackedRevenue vs the ad's Meta revenue for the gap).
+   */
+  regionRevenue: { region: string; revenue: number; orders: number }[];
+  trackedRevenue: { revenue: number; orders: number } | null;
   log: { author: string; text: string; createdAt: string }[];
 };
 
@@ -253,6 +271,21 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
     select l.text, l.created_at, u.name as author
     from ad_decision_log l join users u on u.id = l.author_id
     where l.ad_id = ${adId} order by l.created_at desc`;
+  const demographics = await sqlClient`
+    select dimension, segment, spend, revenue, impressions, clicks, conversions, reach
+    from ad_demographic_metrics where ad_id = ${adId} order by spend desc`;
+
+  // Shopify attribution is optional — the table only exists where the store
+  // connection is configured, so probe before querying it.
+  const [{ present }] = await sqlClient<{ present: boolean }[]>`
+    select to_regclass('public.shopify_ad_revenue') is not null as present`;
+  const regionRevenue = present
+    ? await sqlClient`
+        select region, sum(revenue) as revenue, sum(orders)::int as orders
+        from shopify_ad_revenue where ad_id = ${adId}
+        group by region having sum(revenue) > 0
+        order by sum(revenue) desc`
+    : [];
 
   const rng = (k: string) => ranges.find((r) => r.range === k);
   const lifetimeReach = rng("lifetime");
@@ -298,6 +331,27 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
         frequency: Number(rng("prior_7")?.frequency ?? 0),
       },
     },
+    regionRevenue: regionRevenue.map((r) => ({
+      region: String(r.region),
+      revenue: Number(r.revenue),
+      orders: Number(r.orders),
+    })),
+    trackedRevenue: regionRevenue.length
+      ? {
+          revenue: regionRevenue.reduce((s, r) => s + Number(r.revenue), 0),
+          orders: regionRevenue.reduce((s, r) => s + Number(r.orders), 0),
+        }
+      : null,
+    demographics: demographics.map((d) => ({
+      dimension: String(d.dimension),
+      segment: String(d.segment),
+      spend: Number(d.spend),
+      revenue: Number(d.revenue),
+      impressions: Number(d.impressions),
+      clicks: Number(d.clicks),
+      conversions: Number(d.conversions),
+      reach: Number(d.reach),
+    })),
     log: log.map((l) => ({
       author: l.author,
       text: l.text,

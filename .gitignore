@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local dev log
 .dev.log
+
+# local data dumps from the Shopify pull scripts
+shopify-*.json

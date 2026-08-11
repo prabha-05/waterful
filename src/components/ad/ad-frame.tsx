@@ -258,6 +258,14 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
               </p>
             )}
           </section>
+
+          {data.demographics.length > 0 && (
+            <AudienceBreakdown
+              demographics={data.demographics}
+              regionRevenue={data.regionRevenue}
+              trackedRevenue={data.trackedRevenue}
+            />
+          )}
         </div>
 
         {/* Right — decision log */}
@@ -355,6 +363,237 @@ function Sparkline({
           );
         })()}
       </svg>
+    </div>
+  );
+}
+
+/** Audience sections — who this creative actually reached (stacked, no tabs). */
+const AUDIENCE_DIMS: { key: string; label: string; note?: string }[] = [
+  { key: "age", label: "Age" },
+  { key: "gender", label: "Gender" },
+  { key: "age_gender", label: "Age × Gender" },
+  { key: "region", label: "Region", note: "spend and reach only — Meta reports no revenue by region" },
+];
+
+// Age buckets read better in order; regions rank by spend.
+const AGE_ORDER = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Unknown", "unknown"];
+const GENDER_ORDER = ["female", "male", "unknown"];
+const AUD_GRID = "grid-cols-[minmax(100px,1fr)_minmax(150px,220px)_90px_90px_70px]";
+const AUD_GRID_NOREV = "grid-cols-[minmax(110px,1fr)_150px_90px_110px]";
+const join = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(" ");
+
+
+const genderOf = (segment: string) => segment.split(" ").slice(-1)[0].toLowerCase();
+const ageOf = (segment: string) => segment.split(" ")[0];
+
+function AudienceBreakdown({
+  demographics,
+  regionRevenue,
+  trackedRevenue,
+}: {
+  demographics: AdFrameData["demographics"];
+  regionRevenue: AdFrameData["regionRevenue"];
+  trackedRevenue: AdFrameData["trackedRevenue"];
+}) {
+  const present = AUDIENCE_DIMS.filter((d) => demographics.some((x) => x.dimension === d.key));
+  if (present.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-5">
+      <div>
+        <h3 className="text-sm font-semibold text-ink">Audience breakdown</h3>
+        <p className="text-[11px] text-muted">who this creative actually reached</p>
+      </div>
+      {present.map((dim) => (
+        <AudienceTable
+          key={dim.key}
+          dim={dim}
+          demographics={demographics}
+          regionRevenue={regionRevenue}
+          trackedRevenue={trackedRevenue}
+        />
+      ))}
+    </section>
+  );
+}
+
+function AudienceTable({
+  dim,
+  demographics,
+  regionRevenue,
+  trackedRevenue,
+}: {
+  dim: { key: string; label: string; note?: string };
+  demographics: AdFrameData["demographics"];
+  regionRevenue: AdFrameData["regionRevenue"];
+  trackedRevenue: AdFrameData["trackedRevenue"];
+}) {
+  const fmt = useFormat();
+  const isRegion = dim.key === "region";
+  // Meta gives no revenue by region, so region revenue comes from Shopify
+  // orders tagged with this ad's id. Present only once the store is connected.
+  const adRev = isRegion && regionRevenue.length > 0 ? regionRevenue : null;
+  const hasRevenue = !isRegion || adRev !== null;
+  const revByRegion = new Map(regionRevenue.map((r) => [r.region, r]));
+
+  const rows = demographics
+    .filter((d) => d.dimension === dim.key)
+    // Region rows arrive from Meta with revenue 0 — graft on the real number.
+    .map((d) => (isRegion ? { ...d, revenue: revByRegion.get(d.segment)?.revenue ?? 0 } : d))
+    .sort((a, b) => {
+      if (dim.key === "age") return AGE_ORDER.indexOf(a.segment) - AGE_ORDER.indexOf(b.segment);
+      // Age × Gender: keep the genders apart, ages in order inside each — the
+      // point is comparing like with like, not one interleaved spend ranking.
+      if (dim.key === "age_gender") {
+        const g = GENDER_ORDER.indexOf(genderOf(a.segment)) - GENDER_ORDER.indexOf(genderOf(b.segment));
+        return g !== 0 ? g : AGE_ORDER.indexOf(ageOf(a.segment)) - AGE_ORDER.indexOf(ageOf(b.segment));
+      }
+      return b.spend - a.spend;
+    })
+    .slice(0, dim.key === "region" ? 12 : 24);
+  if (rows.length === 0) return null;
+
+  // Both bars share one scale so their lengths are directly comparable: a
+  // revenue bar shorter than its spend bar IS the loss, visible at a glance.
+  const scaleMax = Math.max(...rows.map((r) => Math.max(r.spend, hasRevenue ? r.revenue : 0)), 1);
+
+  return (
+    <div>
+      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-[13px] font-semibold text-ink-2">
+          {dim.label}
+          {dim.key === "region" && rows.length === 12 && (
+            <span className="ml-1 font-normal text-muted">· top 12 states</span>
+          )}
+        </h4>
+        {hasRevenue ? (
+          <span className="flex items-center gap-3 text-[11px] text-muted">
+            <span className="flex items-center gap-1">
+              <i className="inline-block h-[7px] w-3 rounded-sm bg-brand" /> spend
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="inline-block h-[7px] w-3 rounded-sm bg-green" /> revenue
+            </span>
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted">{dim.note}</span>
+        )}
+      </div>
+
+      {adRev && trackedRevenue && (
+        // Be explicit that this is measured last-click, not Meta's modelled
+        // number — the two will not agree, and the gap is the point.
+        <p className="mb-1.5 text-[11px] leading-relaxed text-muted">
+          Revenue is <strong className="font-medium text-ink-3">real Shopify orders tagged with this ad</strong> —{" "}
+          {formatInt(trackedRevenue.orders)} order{trackedRevenue.orders === 1 ? "" : "s"} worth{" "}
+          {fmt(trackedRevenue.revenue)}. Last-click only: orders that lost the tracking link are not counted, so
+          read this as the floor and Meta&apos;s figure as the ceiling.
+        </p>
+      )}
+
+      <div className="overflow-x-auto rounded-[var(--radius-control)] border border-line bg-surface">
+        <div className="min-w-[520px]">
+          <div
+            className={join(
+              "grid items-center gap-3 border-b border-line-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted",
+              hasRevenue ? AUD_GRID : AUD_GRID_NOREV,
+            )}
+          >
+            <span>{dim.label}</span>
+            <span>{hasRevenue ? "Spend vs revenue" : "Spend share"}</span>
+            <span className="text-right">Spend</span>
+            {hasRevenue ? (
+              <>
+                <span className="text-right">Revenue</span>
+                <span className="text-right">ROAS</span>
+              </>
+            ) : (
+              <span className="text-right">Impressions</span>
+            )}
+          </div>
+
+          {rows.map((r, i) => {
+            const roas = r.spend > 0 ? r.revenue / r.spend : 0;
+            const tone = roas >= 1.3 ? "text-green" : roas >= 1 ? "text-amber" : "text-red";
+            // Gender divider + subtotal when the group changes (Age × Gender only).
+            const gender = dim.key === "age_gender" ? genderOf(r.segment) : null;
+            const newGroup = gender !== null && (i === 0 || genderOf(rows[i - 1].segment) !== gender);
+            const groupRows = gender ? rows.filter((x) => genderOf(x.segment) === gender) : [];
+            const gSpend = groupRows.reduce((s, x) => s + x.spend, 0);
+            const gRev = groupRows.reduce((s, x) => s + x.revenue, 0);
+            const label = dim.key === "age_gender" ? ageOf(r.segment) : r.segment;
+
+            const regionOrders = isRegion ? (revByRegion.get(r.segment)?.orders ?? 0) : 0;
+
+            return (
+              <div key={r.segment} className="contents">
+                {newGroup && (
+                  <div className="flex items-baseline justify-between gap-2 border-b border-line-2 bg-surface-2 px-4 py-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">{gender}</span>
+                    <span className="font-mono text-[11px] text-muted">
+                      {fmt(gSpend)} spend · {fmt(gRev)} revenue ·{" "}
+                      <span className={gSpend > 0 && gRev / gSpend >= 1 ? "text-green" : "text-red"}>
+                        {gSpend > 0 ? formatRoas(gRev / gSpend) : "—"}
+                      </span>
+                    </span>
+                  </div>
+                )}
+                <div
+                  className={join(
+                    "grid items-center gap-3 border-b border-line-2 px-4 py-2.5 text-sm last:border-0",
+                    hasRevenue ? AUD_GRID : AUD_GRID_NOREV,
+                  )}
+                >
+                  <span className="truncate font-medium capitalize text-ink">{label}</span>
+                  {hasRevenue ? (
+                    // Paired bars: spend above, revenue below, same scale. Revenue
+                    // is green when it clears spend, red when it doesn't.
+                    <div className="flex w-full flex-col gap-[3px]">
+                      <div className="h-[7px] w-full overflow-hidden rounded-sm bg-line-2">
+                        <div
+                          className="h-full rounded-sm bg-brand"
+                          style={{ width: `${Math.min(100, (r.spend / scaleMax) * 100)}%` }}
+                          title={`Spend ${fmt(r.spend)}`}
+                        />
+                      </div>
+                      <div className="h-[7px] w-full overflow-hidden rounded-sm bg-line-2">
+                        <div
+                          className="h-full rounded-sm bg-green"
+                          style={{ width: `${Math.min(100, (r.revenue / scaleMax) * 100)}%` }}
+                          title={`Revenue ${fmt(r.revenue)}`}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-line-2">
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${Math.min(100, (r.spend / scaleMax) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                  <span className="text-right font-mono text-ink">{fmt(r.spend)}</span>
+                  {hasRevenue ? (
+                    <>
+                      <span
+                        className="text-right font-mono text-ink-3"
+                        title={isRegion ? `${regionOrders} tracked order${regionOrders === 1 ? "" : "s"}` : undefined}
+                      >
+                        {fmt(r.revenue)}
+                      </span>
+                      <span className={`text-right font-mono ${tone}`}>
+                        {r.spend > 0 ? formatRoas(roas) : "—"}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-right font-mono text-ink-3">{formatInt(r.impressions)}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

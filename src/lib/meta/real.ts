@@ -2,6 +2,7 @@ import type {
   MetaActivation,
   MetaAdStatus,
   MetaDaily,
+  MetaDemographic,
   MetaPull,
   MetaRange,
 } from "./types";
@@ -185,7 +186,71 @@ export async function fetchMetaData(
     rangeReach("prior_7"),
   ]);
 
+  // 4) Audience breakdowns. Meta allows age+gender together, and region on its
+  //    own — the combination is rejected (#100) — so it's two calls. age/gender
+  //    rows are folded into single-dimension totals for the simpler tabs.
+  const demoWindow: GraphParams = opts.since
+    ? { time_range: JSON.stringify({ since: ymd(opts.since), until: ymd(new Date()) }) }
+    : { date_preset: "maximum" };
+
+  const demographics: MetaDemographic[] = [];
+  const bump = (
+    acc: Map<string, MetaDemographic>,
+    dimension: MetaDemographic["dimension"],
+    segment: string,
+    r: any,
+    withRevenue: boolean,
+  ) => {
+    const key = `${dimension}|${segment}`;
+    const cur = acc.get(key) ?? {
+      dimension, segment, spend: 0, revenue: 0, impressions: 0, clicks: 0, conversions: 0, reach: 0,
+    };
+    cur.spend += Number(r.spend) || 0;
+    cur.impressions += Number(r.impressions) || 0;
+    cur.clicks += Number(r.clicks) || 0;
+    cur.reach += Number(r.reach) || 0;
+    if (withRevenue) {
+      cur.revenue += purchase(r.action_values);
+      cur.conversions += purchase(r.actions);
+    }
+    acc.set(key, cur);
+  };
+
+  try {
+    const agRows = await graphAll(`${adId}/insights`, {
+      fields: "spend,impressions,reach,clicks,actions,action_values",
+      breakdowns: "age,gender",
+      limit: "200",
+      ...demoWindow,
+    });
+    const acc = new Map<string, MetaDemographic>();
+    for (const r of agRows) {
+      const age = String(r.age ?? "unknown");
+      const gender = String(r.gender ?? "unknown");
+      bump(acc, "age", age, r, true);
+      bump(acc, "gender", gender, r, true);
+      bump(acc, "age_gender", `${age} ${gender}`, r, true);
+    }
+    demographics.push(...acc.values());
+  } catch {
+    // Breakdown unavailable for this ad — the rest of the pull still stands.
+  }
+
+  try {
+    const regionRows = await graphAll(`${adId}/insights`, {
+      fields: "spend,impressions,reach,clicks",
+      breakdowns: "region",
+      limit: "500",
+      ...demoWindow,
+    });
+    const acc = new Map<string, MetaDemographic>();
+    for (const r of regionRows) bump(acc, "region", String(r.region ?? "unknown"), r, false);
+    demographics.push(...acc.values());
+  } catch {
+    // ignore — region is the least critical breakdown
+  }
+
   const campaignStart = daily.length ? daily[0].asOfDate : ymd(new Date());
 
-  return { activation, daily, ranges, campaignStart };
+  return { activation, daily, ranges, demographics, campaignStart };
 }

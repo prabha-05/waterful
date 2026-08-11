@@ -57,6 +57,27 @@
       "when": 1786700000000,
       "tag": "0007_creative_file_poster",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786710000000,
+      "tag": "0008_demographics",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786720000000,
+      "tag": "0009_shopify_regional",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786730000000,
+      "tag": "0010_shopify_ad_revenue",
+      "breakpoints": true
     }
   ]
 }

@@ -150,5 +150,11 @@ export function fetchMetaData(
     optimization: pick(rng, OPTIMIZATIONS),
   };
 
-  return { activation, daily, ranges, campaignStart: ymd(campaignStartDate) };
+  return {
+    activation,
+    daily,
+    ranges,
+    demographics: [], // simulated audience data would be actively misleading
+    campaignStart: ymd(campaignStartDate),
+  };
 }

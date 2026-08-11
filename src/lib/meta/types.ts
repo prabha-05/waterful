@@ -42,9 +42,22 @@ export type MetaRange = {
   frequency: number;
 };
 
+/** Audience breakdown row. `dimension` is age | gender | age_gender | region. */
+export type MetaDemographic = {
+  dimension: "age" | "gender" | "age_gender" | "region";
+  segment: string;
+  spend: number;
+  revenue: number; // always 0 for region — Meta gives no revenue by region
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  reach: number;
+};
+
 export type MetaPull = {
   activation: MetaActivation;
   daily: MetaDaily[];
   ranges: MetaRange[];
+  demographics: MetaDemographic[]; // age / gender / age_gender / region
   campaignStart: string; // YYYY-MM-DD
 };
