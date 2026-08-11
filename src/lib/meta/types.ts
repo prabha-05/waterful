@@ -42,8 +42,14 @@ export type MetaRange = {
   frequency: number;
 };
 
-/** Audience breakdown row. `dimension` is age | gender | age_gender | region. */
+/**
+ * Audience breakdown row, ONE PER DAY per segment (time_increment=1) so any
+ * date range can be re-aggregated later. spend / revenue / impressions / clicks
+ * / conversions sum cleanly across days; `reach` does NOT — Meta de-duplicates
+ * it per row, so summing it overstates.
+ */
 export type MetaDemographic = {
+  asOfDate: string; // YYYY-MM-DD
   dimension: "age" | "gender" | "age_gender" | "region";
   segment: string;
   spend: number;

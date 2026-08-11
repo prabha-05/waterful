@@ -101,24 +101,48 @@ export async function runMetaSync(
         );
       }
 
-      // Audience breakdowns: replace (a snapshot of the pulled window).
-      await db.delete(adDemographicMetrics).where(eq(adDemographicMetrics.adId, ad.adId));
-      if (pull.demographics.length > 0) {
-        await db.insert(adDemographicMetrics).values(
-          pull.demographics.map((d) => ({
-            adId: ad.adId,
-            dimension: d.dimension,
-            segment: d.segment,
-            spend: String(d.spend),
-            revenue: String(d.revenue),
-            impressions: d.impressions,
-            clicks: d.clicks,
-            conversions: d.conversions,
-            reach: d.reach,
-            window,
-            syncedAt: new Date(),
-          })),
-        );
+      // Audience breakdowns: upsert per (ad, day, dimension, segment). NOT a
+      // delete-then-insert — these are now a daily series, and a 28-day sync
+      // must refresh its own window without erasing older history.
+      // Chunked because a lifetime rebuild can return thousands of rows per ad
+      // and Postgres caps a statement at 65535 bind parameters.
+      for (let i = 0; i < pull.demographics.length; i += 500) {
+        await db
+          .insert(adDemographicMetrics)
+          .values(
+            pull.demographics.slice(i, i + 500).map((d) => ({
+              adId: ad.adId,
+              asOfDate: d.asOfDate,
+              dimension: d.dimension,
+              segment: d.segment,
+              spend: String(d.spend),
+              revenue: String(d.revenue),
+              impressions: d.impressions,
+              clicks: d.clicks,
+              conversions: d.conversions,
+              reach: d.reach,
+              window,
+              syncedAt: new Date(),
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [
+              adDemographicMetrics.adId,
+              adDemographicMetrics.asOfDate,
+              adDemographicMetrics.dimension,
+              adDemographicMetrics.segment,
+            ],
+            set: {
+              spend: sql`excluded.spend`,
+              revenue: sql`excluded.revenue`,
+              impressions: sql`excluded.impressions`,
+              clicks: sql`excluded.clicks`,
+              conversions: sql`excluded.conversions`,
+              reach: sql`excluded.reach`,
+              window: sql`excluded.window`,
+              syncedAt: sql`excluded.synced_at`,
+            },
+          });
       }
 
       await db

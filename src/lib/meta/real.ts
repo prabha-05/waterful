@@ -201,9 +201,12 @@ export async function fetchMetaData(
     r: any,
     withRevenue: boolean,
   ) => {
-    const key = `${dimension}|${segment}`;
+    // Keyed by day as well as segment: with time_increment=1 each row is one
+    // day, which is what makes an arbitrary date range re-aggregatable.
+    const asOfDate = String(r.date_start ?? ymd(new Date()));
+    const key = `${asOfDate}|${dimension}|${segment}`;
     const cur = acc.get(key) ?? {
-      dimension, segment, spend: 0, revenue: 0, impressions: 0, clicks: 0, conversions: 0, reach: 0,
+      asOfDate, dimension, segment, spend: 0, revenue: 0, impressions: 0, clicks: 0, conversions: 0, reach: 0,
     };
     cur.spend += Number(r.spend) || 0;
     cur.impressions += Number(r.impressions) || 0;
@@ -220,7 +223,8 @@ export async function fetchMetaData(
     const agRows = await graphAll(`${adId}/insights`, {
       fields: "spend,impressions,reach,clicks,actions,action_values",
       breakdowns: "age,gender",
-      limit: "200",
+      time_increment: "1",
+      limit: "500",
       ...demoWindow,
     });
     const acc = new Map<string, MetaDemographic>();
@@ -240,6 +244,7 @@ export async function fetchMetaData(
     const regionRows = await graphAll(`${adId}/insights`, {
       fields: "spend,impressions,reach,clicks",
       breakdowns: "region",
+      time_increment: "1",
       limit: "500",
       ...demoWindow,
     });

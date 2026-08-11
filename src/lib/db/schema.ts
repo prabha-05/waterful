@@ -281,6 +281,9 @@ export const adDemographicMetrics = pgTable(
     adId: text("ad_id")
       .notNull()
       .references(() => adActivations.metaAdId, { onDelete: "cascade" }),
+    // Stored per DAY so any date range can be re-aggregated. spend/revenue/
+    // impressions/clicks/conversions sum across days; `reach` must not be.
+    asOfDate: date("as_of_date").notNull(),
     dimension: text("dimension").notNull(), // age | gender | age_gender | region
     segment: text("segment").notNull(), // "35-44" | "male" | "35-44 male" | "Maharashtra"
     spend: numeric("spend", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -292,7 +295,7 @@ export const adDemographicMetrics = pgTable(
     window: text("window").notNull().default("28d"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.adId, t.dimension, t.segment] })],
+  (t) => [primaryKey({ columns: [t.adId, t.asOfDate, t.dimension, t.segment] })],
 );
 
 /**

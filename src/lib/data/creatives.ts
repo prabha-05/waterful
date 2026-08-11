@@ -271,9 +271,17 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
     select l.text, l.created_at, u.name as author
     from ad_decision_log l join users u on u.id = l.author_id
     where l.ad_id = ${adId} order by l.created_at desc`;
+  // Demographics are stored per day; the ad frame wants lifetime totals, so
+  // sum them here. `reach` is de-duplicated per row and is deliberately maxed
+  // rather than summed — a sum would count the same person once per day.
   const demographics = await sqlClient`
-    select dimension, segment, spend, revenue, impressions, clicks, conversions, reach
-    from ad_demographic_metrics where ad_id = ${adId} order by spend desc`;
+    select dimension, segment,
+           sum(spend) as spend, sum(revenue) as revenue,
+           sum(impressions) as impressions, sum(clicks) as clicks,
+           sum(conversions) as conversions, max(reach) as reach
+    from ad_demographic_metrics where ad_id = ${adId}
+    group by dimension, segment
+    order by sum(spend) desc`;
 
   // Shopify attribution is optional — the table only exists where the store
   // connection is configured, so probe before querying it.

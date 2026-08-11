@@ -332,10 +332,13 @@ export async function linkAd(
         })),
       );
     }
-    if (pull.demographics.length > 0) {
+    // Daily demographic rows — chunked to stay under Postgres' bind-parameter
+    // cap, since a lifetime backfill can return thousands per ad.
+    for (let i = 0; i < pull.demographics.length; i += 500) {
       await db.insert(adDemographicMetrics).values(
-        pull.demographics.map((d) => ({
+        pull.demographics.slice(i, i + 500).map((d) => ({
           adId,
+          asOfDate: d.asOfDate,
           dimension: d.dimension,
           segment: d.segment,
           spend: String(d.spend),
