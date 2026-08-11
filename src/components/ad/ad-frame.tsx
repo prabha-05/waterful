@@ -395,7 +395,13 @@ function AudienceBreakdown({
   regionRevenue: AdFrameData["regionRevenue"];
   trackedRevenue: AdFrameData["trackedRevenue"];
 }) {
-  const present = AUDIENCE_DIMS.filter((d) => demographics.some((x) => x.dimension === d.key));
+  const present = AUDIENCE_DIMS.filter(
+    (d) =>
+      demographics.some((x) => x.dimension === d.key) ||
+      // Region stands on its own: Shopify knows where the orders came from even
+      // when Meta has given us no demographic rows for this ad.
+      (d.key === "region" && regionRevenue.length > 0),
+  );
   if (present.length === 0) return null;
 
   return (
@@ -436,10 +442,28 @@ function AudienceTable({
   const hasRevenue = !isRegion || adRev !== null;
   const revByRegion = new Map(regionRevenue.map((r) => [r.region, r]));
 
-  const rows = demographics
-    .filter((d) => d.dimension === dim.key)
-    // Region rows arrive from Meta with revenue 0 — graft on the real number.
-    .map((d) => (isRegion ? { ...d, revenue: revByRegion.get(d.segment)?.revenue ?? 0 } : d))
+  const base = demographics.filter((d) => d.dimension === dim.key);
+  // Region rows arrive from Meta with revenue 0 — graft on the real number, and
+  // add any state that produced orders but has no Meta spend row of its own.
+  const merged = isRegion
+    ? [
+        ...base.map((d) => ({ ...d, revenue: revByRegion.get(d.segment)?.revenue ?? 0 })),
+        ...regionRevenue
+          .filter((r) => !base.some((d) => d.segment === r.region))
+          .map((r) => ({
+            dimension: "region",
+            segment: r.region,
+            spend: 0,
+            revenue: r.revenue,
+            impressions: 0,
+            clicks: 0,
+            conversions: 0,
+            reach: 0,
+          })),
+      ]
+    : base;
+
+  const rows = merged
     .sort((a, b) => {
       if (dim.key === "age") return AGE_ORDER.indexOf(a.segment) - AGE_ORDER.indexOf(b.segment);
       // Age × Gender: keep the genders apart, ages in order inside each — the
@@ -448,7 +472,7 @@ function AudienceTable({
         const g = GENDER_ORDER.indexOf(genderOf(a.segment)) - GENDER_ORDER.indexOf(genderOf(b.segment));
         return g !== 0 ? g : AGE_ORDER.indexOf(ageOf(a.segment)) - AGE_ORDER.indexOf(ageOf(b.segment));
       }
-      return b.spend - a.spend;
+      return b.spend - a.spend || b.revenue - a.revenue;
     })
     .slice(0, dim.key === "region" ? 12 : 24);
   if (rows.length === 0) return null;
@@ -488,6 +512,9 @@ function AudienceTable({
           {formatInt(trackedRevenue.orders)} order{trackedRevenue.orders === 1 ? "" : "s"} worth{" "}
           {fmt(trackedRevenue.revenue)}. Last-click only: orders that lost the tracking link are not counted, so
           read this as the floor and Meta&apos;s figure as the ceiling.
+          {rows.every((r) => r.spend === 0) && (
+            <> Per-state spend is missing until the next Meta sync runs.</>
+          )}
         </p>
       )}
 
