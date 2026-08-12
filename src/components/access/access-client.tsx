@@ -18,6 +18,7 @@ import { Button, Chip, Input, Select } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
 const PERM_LABEL: Record<Permission, string> = {
+  script: "Write scripts",
   upload: "Upload",
   link: "Link",
   unlink: "Unlink",

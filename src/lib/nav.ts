@@ -6,7 +6,7 @@ export type NavItem = {
   /** Visible to any valid user when omitted; otherwise OR of the listed perms. */
   requires?: Permission[];
   /** Awaiting shows a count badge (README §2/§8). */
-  badge?: "awaiting";
+  badge?: "awaiting" | "scripts";
 };
 
 /**
@@ -15,6 +15,7 @@ export type NavItem = {
  * off) sees only Library, Dashboard, and Settings.
  */
 export const NAV: NavItem[] = [
+  { href: "/scripts", label: "Script Library", requires: ["script"], badge: "scripts" },
   { href: "/library", label: "Creative Library" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/reports", label: "Reports" },

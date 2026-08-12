@@ -3,6 +3,8 @@ import { Sidebar } from "@/components/app-shell/sidebar";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getSettings } from "@/lib/settings";
 import { SettingsProvider } from "@/components/providers/settings-provider";
+import { getScriptsInReviewCount } from "@/lib/data/scripts";
+import { getAwaitingCount } from "@/lib/data/creatives";
 
 /**
  * Authenticated app shell. Enforces authorization server-side on every request
@@ -18,6 +20,13 @@ export default async function AppLayout({
 
   if (!user) redirect("/login");
   if (!user.hasValidRole) redirect("/no-access");
+
+  // Nav badges. Only queried when the person can act on them, so a Viewer's
+  // page load doesn't pay for counts they will never see.
+  const [awaitingCount, scriptCount] = await Promise.all([
+    user.permissions.upload || user.permissions.link ? getAwaitingCount() : Promise.resolve(0),
+    user.permissions.script ? getScriptsInReviewCount() : Promise.resolve(0),
+  ]);
 
   return (
     <SettingsProvider
@@ -35,6 +44,8 @@ export default async function AppLayout({
             roleLabel: user.role?.label ?? null,
             permissions: user.permissions,
           }}
+          awaitingCount={awaitingCount}
+          scriptCount={scriptCount}
         />
         {/* pt-14 on mobile clears the fixed hamburger top bar; none on desktop. */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden pt-14 md:pt-0">

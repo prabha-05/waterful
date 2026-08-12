@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   user: { name: string; roleLabel: string | null; permissions: Permissions };
   awaitingCount?: number;
+  scriptCount?: number;
 };
 
 /**
@@ -19,7 +20,7 @@ type Props = {
  * Desktop: static 248px column. Mobile (<md): a top bar with a hamburger that
  * slides the sidebar in as an overlay drawer.
  */
-export function Sidebar({ user, awaitingCount = 0 }: Props) {
+export function Sidebar({ user, awaitingCount = 0, scriptCount = 0 }: Props) {
   const pathname = usePathname();
   const items = visibleNav(user.permissions);
   const [open, setOpen] = useState(false);
@@ -98,6 +99,11 @@ export function Sidebar({ user, awaitingCount = 0 }: Props) {
               )}
             >
               <span>{item.label}</span>
+              {item.badge === "scripts" && scriptCount > 0 && (
+                <span className="rounded-full bg-awaiting px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                  {scriptCount}
+                </span>
+              )}
               {item.badge === "awaiting" && awaitingCount > 0 && (
                 <span className="rounded-full bg-awaiting px-1.5 py-0.5 text-[11px] font-semibold text-white">
                   {awaitingCount}

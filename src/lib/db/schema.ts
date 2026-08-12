@@ -39,6 +39,20 @@ export const creativeStatus = pgEnum("creative_status", [
   "archived",
 ]);
 
+/**
+ * Script pipeline. Order matters — `advance` walks this list forwards:
+ *   draft | changes → review → approved → creators → received
+ * and `reject` sends anything back to `changes`.
+ */
+export const scriptStage = pgEnum("script_stage", [
+  "draft",
+  "review",
+  "changes",
+  "approved",
+  "creators",
+  "received",
+]);
+
 // Ad status mirrored from Meta (read-only in v1, §6). Kept as text-ish enum.
 export const adStatus = pgEnum("ad_status", [
   "active",
@@ -72,7 +86,9 @@ export const roles = pgTable("roles", {
   isSystem: boolean("is_system").notNull().default(false),
   isLocked: boolean("is_locked").notNull().default(false),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
-  // The permission booleans (decisions §4; `sync` added 2026-07 for Meta Sync).
+  // The permission booleans (decisions §4; `sync` added 2026-07 for Meta Sync,
+  // `script` added 2026-08 for the Script Library — eight in total).
+  permScript: boolean("perm_script").notNull().default(false),
   permUpload: boolean("perm_upload").notNull().default(false),
   permLink: boolean("perm_link").notNull().default(false),
   permUnlink: boolean("perm_unlink").notNull().default(false),
@@ -173,6 +189,9 @@ export const creatives = pgTable("creatives", {
   reviewLink: text("review_link").notNull(),
   reviewSummary: text("review_summary").notNull(),
   status: creativeStatus("status").notNull().default("draft"),
+  // Set when a creative is uploaded against an approved script — the seam that
+  // closes the script → creative loop. Null for anything uploaded directly.
+  scriptId: uuid("script_id").references(() => scripts.id, { onDelete: "set null" }),
   // Attribution references the user, survives role_id = NULL (decisions §5).
   uploadedBy: uuid("uploaded_by")
     .notNull()
@@ -194,6 +213,51 @@ export const creativePersonas = pgTable(
   },
   (t) => [primaryKey({ columns: [t.creativeId, t.personaId] })],
 );
+
+/**
+ * Scripts — the stage BEFORE a creative exists. A writer drafts one, it moves
+ * through review to approved, goes out to a creator, and comes back as an
+ * uploaded creative. `creatives.script_id` is the seam that closes that loop.
+ *
+ * One angle and one persona per script (a creative may carry several personas;
+ * a script is written for one). `type` is the intended format as free text —
+ * the creative's real type is set at upload against the taxonomy.
+ */
+export const scripts = pgTable("scripts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").notNull().unique(), // SCR-0001, human-quotable
+  title: text("title").notNull(),
+  hookLine: text("hook_line").notNull().default(""),
+  body: text("body").notNull().default(""),
+  noteTitle: text("note_title"),
+  noteTone: text("note_tone"),
+  angleId: uuid("angle_id").references(() => angles.id),
+  personaId: uuid("persona_id").references(() => personas.id),
+  type: text("type"), // Video | Static | Carousel — intended format
+  runtime: integer("runtime"), // seconds
+  words: integer("words").notNull().default(0),
+  version: integer("version").notNull().default(1),
+  stage: scriptStage("stage").notNull().default("draft"),
+  writerId: uuid("writer_id")
+    .notNull()
+    .references(() => users.id),
+  creatorId: uuid("creator_id").references(() => users.id), // set when it goes to creators
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Append-only trail of every transition and edit, so the history survives. */
+export const scriptActivity = pgTable("script_activity", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  scriptId: uuid("script_id")
+    .notNull()
+    .references(() => scripts.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  actorId: uuid("actor_id")
+    .notNull()
+    .references(() => users.id),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // #5: replaces single creatives.file_ref. Carousel = many rows ordered by position.
 export const creativeFiles = pgTable("creative_files", {

@@ -14,6 +14,7 @@ import {
   creatives,
 } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
+import { markScriptReceived } from "@/app/actions/scripts";
 import { fetchMetaData } from "@/lib/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -41,6 +42,8 @@ export async function createCreative(data: {
   reviewSummary: string;
   personaIds: string[];
   files: { storagePath: string; position: number; posterPath?: string | null }[];
+  /** Set when uploading against an approved script — closes the script loop. */
+  scriptId?: string | null;
 }): Promise<ActionResult> {
   let user;
   try {
@@ -79,6 +82,7 @@ export async function createCreative(data: {
       reviewSummary: data.reviewSummary.trim(),
       status: "draft",
       uploadedBy: user.id,
+      scriptId: data.scriptId || null,
     })
     .returning({ id: creatives.id });
 
@@ -93,6 +97,12 @@ export async function createCreative(data: {
   await db.insert(creativePersonas).values(
     data.personaIds.map((personaId) => ({ creativeId: created.id, personaId })),
   );
+
+  // The seam: the script this was shot from is now answered for.
+  if (data.scriptId) {
+    await markScriptReceived(data.scriptId, user.id, title);
+    revalidatePath("/scripts");
+  }
 
   revalidateLoop();
   return { ok: true, id: created.id };

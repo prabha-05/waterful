@@ -185,6 +185,19 @@ export async function getCreativeDetail(id: string): Promise<CreativeDetail | nu
   };
 }
 
+/**
+ * Count for the Awaiting nav badge. A direct count rather than
+ * `getAwaiting().length` — that builds every Library card (personas, files,
+ * signed thumbnails) on every page load just to produce a number.
+ */
+export async function getAwaitingCount(): Promise<number> {
+  const [r] = await sqlClient`
+    select count(*)::int as n from creatives c
+    where c.status <> 'archived'
+      and not exists (select 1 from ad_activations aa where aa.creative_id = c.id)`;
+  return Number(r?.n ?? 0);
+}
+
 /** Creatives with no linked ad and status ≠ archived (Awaiting Linking, README §8). */
 export async function getAwaiting(): Promise<CreativeCard[]> {
   return (await listCreatives()).filter(
