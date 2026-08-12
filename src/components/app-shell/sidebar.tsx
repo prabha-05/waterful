@@ -4,8 +4,36 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, X } from "lucide-react";
+import {
+  BarChart3,
+  CalendarRange,
+  Clock,
+  FileText,
+  LayoutGrid,
+  Layers,
+  LogOut,
+  Menu,
+  RefreshCw,
+  Settings,
+  Users,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import type { Permissions } from "@/lib/auth/permissions";
+import type { NavIcon } from "@/lib/nav";
+
+/** Nav glyphs, mapped by name so lib/nav.ts stays free of component imports. */
+const NAV_ICON: Record<NavIcon, LucideIcon> = {
+  script: FileText,
+  library: LayoutGrid,
+  dashboard: BarChart3,
+  reports: CalendarRange,
+  awaiting: Clock,
+  master: Layers,
+  access: Users,
+  sync: RefreshCw,
+  settings: Settings,
+};
 import { visibleNav } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +126,13 @@ export function Sidebar({ user, awaitingCount = 0, scriptCount = 0 }: Props) {
                   : "text-ink-2 hover:bg-surface-2",
               )}
             >
-              <span>{item.label}</span>
+              <span className="flex items-center gap-2.5">
+                {(() => {
+                  const Icon = NAV_ICON[item.icon];
+                  return <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />;
+                })()}
+                {item.label}
+              </span>
               {item.badge === "scripts" && scriptCount > 0 && (
                 <span className="rounded-full bg-awaiting px-1.5 py-0.5 text-[11px] font-semibold text-white">
                   {scriptCount}
@@ -119,7 +153,7 @@ export function Sidebar({ user, awaitingCount = 0, scriptCount = 0 }: Props) {
             type="submit"
             className="flex w-full items-center gap-2.5 rounded-[var(--radius-control)] px-3 py-2 text-left text-sm font-medium text-red transition hover:bg-red-bg"
           >
-            <LogOut className="h-[17px] w-[17px]" />
+            <LogOut className="h-[18px] w-[18px]" />
             <span>Log out</span>
           </button>
         </form>

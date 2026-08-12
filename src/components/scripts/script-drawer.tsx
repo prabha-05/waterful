@@ -7,6 +7,7 @@ import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
 import { advanceScript, rejectScript, updateScript } from "@/app/actions/scripts";
 import { fetchScript } from "@/app/actions/script-read";
+import { extractPdfText } from "@/app/actions/script-pdf";
 import { Button, Drawer, Select, Textarea } from "@/components/ui/primitives";
 import { useDate } from "@/components/providers/settings-provider";
 
@@ -43,6 +44,8 @@ export function ScriptDrawer({
   const [personaIds, setPersonaIds] = useState<string[]>([]);
   const [creatorId, setCreatorId] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfNote, setPdfNote] = useState<string | null>(null);
 
   const load = async () => {
     const s = await fetchScript(id);
@@ -120,6 +123,21 @@ export function ScriptDrawer({
     a.download = `${script.code} ${script.title}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const onPdf = async (file: File) => {
+    setPdfNote(null);
+    setErr(null);
+    setPdfBusy(true);
+    const form = new FormData();
+    form.set("file", file);
+    const res = await extractPdfText(form);
+    setPdfBusy(false);
+    if (!res.ok) return setErr(res.error);
+    // Replace the body — the writer chose to import, so the PDF wins.
+    setBody(res.text);
+    setDirty(true);
+    setPdfNote(`Imported ${res.pages} page${res.pages === 1 ? "" : "s"} — review it, then save.`);
   };
 
   const save = () =>
@@ -340,11 +358,37 @@ export function ScriptDrawer({
               <section className="rounded-[var(--radius-card)] border border-line bg-surface">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
                   <h3 className="text-sm font-semibold text-ink">Script</h3>
-                  <span className="font-mono text-[11px] text-muted">
-                    {script.words} words · {script.runtime ? `${script.runtime}s` : "—"}
-                    {script.format ? ` · ${script.format}` : ""}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {canEdit && (
+                      <label
+                        className={`cursor-pointer text-sm font-medium text-brand hover:underline ${
+                          pdfBusy ? "pointer-events-none opacity-60" : ""
+                        }`}
+                      >
+                        {pdfBusy ? "Reading…" : "⬆ Upload PDF"}
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) void onPdf(f);
+                          }}
+                        />
+                      </label>
+                    )}
+                    <span className="font-mono text-[11px] text-muted">
+                      {script.words} words · {script.runtime ? `${script.runtime}s` : "—"}
+                      {script.format ? ` · ${script.format}` : ""}
+                    </span>
+                  </div>
                 </div>
+                {pdfNote && (
+                  <p className="border-b border-line-2 bg-green-bg px-4 py-2 text-[13px] text-green">
+                    {pdfNote}
+                  </p>
+                )}
                 <div className="p-3">
                   <Textarea
                     rows={16}

@@ -7,7 +7,20 @@ export type NavItem = {
   requires?: Permission[];
   /** Awaiting shows a count badge (README §2/§8). */
   badge?: "awaiting" | "scripts";
+  /** lucide-react icon name, resolved in the Sidebar. */
+  icon: NavIcon;
 };
+
+export type NavIcon =
+  | "script"
+  | "library"
+  | "dashboard"
+  | "reports"
+  | "awaiting"
+  | "master"
+  | "access"
+  | "sync"
+  | "settings";
 
 /**
  * Sidebar nav (README §2 + HANDOVER). Visibility is permission-gated (cosmetic;
@@ -15,15 +28,32 @@ export type NavItem = {
  * off) sees only Library, Dashboard, and Settings.
  */
 export const NAV: NavItem[] = [
-  { href: "/scripts", label: "Script Library", requires: ["script"], badge: "scripts" },
-  { href: "/library", label: "Creative Library" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/reports", label: "Reports" },
-  { href: "/awaiting", label: "Awaiting", requires: ["upload", "link"], badge: "awaiting" },
-  { href: "/master-data", label: "Master Data", requires: ["master"] },
-  { href: "/access", label: "Access", requires: ["access"] },
-  { href: "/meta-sync", label: "Meta Sync", requires: ["sync"] },
-  { href: "/settings", label: "Settings" },
+  {
+    href: "/scripts",
+    label: "Script Library",
+    requires: ["script"],
+    badge: "scripts",
+    icon: "script",
+  },
+  { href: "/library", label: "Creative Library", icon: "library" },
+  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/reports", label: "Reports", icon: "reports" },
+  {
+    href: "/awaiting",
+    label: "Awaiting",
+    requires: ["upload", "link"],
+    badge: "awaiting",
+    icon: "awaiting",
+  },
+  {
+    href: "/master-data",
+    label: "Master Data",
+    requires: ["master"],
+    icon: "master",
+  },
+  { href: "/access", label: "Access", requires: ["access"], icon: "access" },
+  { href: "/meta-sync", label: "Meta Sync", requires: ["sync"], icon: "sync" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
 export function visibleNav(perms: Permissions): NavItem[] {
