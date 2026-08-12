@@ -2,8 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { STAGE_LABEL, STAGE_TILES, STAGE_TONE, type ScriptStage } from "@/lib/script-stage";
+import { STAGE, STAGE_TILES, type ScriptStage } from "@/lib/script-stage";
 import type { ScriptLibrary } from "@/lib/data/scripts";
+import type { Taxonomy } from "@/lib/data/taxonomy";
+import type { Permissions } from "@/lib/auth/permissions";
 import { createScript } from "@/app/actions/scripts";
 import { Button, Chip, Field, Input, Modal, Select } from "@/components/ui/primitives";
 import { useDate } from "@/components/providers/settings-provider";
@@ -14,9 +16,13 @@ const GRID = "grid-cols-[minmax(200px,2fr)_140px_130px_130px_56px_88px]";
 export function ScriptsClient({
   data,
   creators,
+  taxonomy,
+  perms,
 }: {
   data: ScriptLibrary;
   creators: { id: string; name: string }[];
+  taxonomy: Taxonomy;
+  perms: Permissions;
 }) {
   const router = useRouter();
   const fmtDate = useDate();
@@ -50,7 +56,7 @@ export function ScriptsClient({
   return (
     <div className="flex flex-col gap-4 p-6">
       {/* ---- stage pipeline as filter tiles ---------------------------- */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StageTile
           label="All"
           count={data.counts.all}
@@ -60,7 +66,7 @@ export function ScriptsClient({
         {STAGE_TILES.map((s) => (
           <StageTile
             key={s}
-            label={STAGE_LABEL[s]}
+            label={STAGE[s].label}
             count={data.counts[s]}
             active={stage === s}
             onClick={() => setStage(stage === s ? "all" : s)}
@@ -161,17 +167,21 @@ export function ScriptsClient({
                   <span className="block truncate font-medium text-ink">{s.title}</span>
                   <span className="mt-1 flex flex-wrap gap-1">
                     {s.angle && <Chip className="bg-brand-chip text-brand-deep">{s.angle}</Chip>}
-                    {s.persona && <Chip className="bg-surface-2 text-ink-3">{s.persona}</Chip>}
-                    {s.type && (
-                      <Chip className="bg-surface-2 text-muted">
-                        {s.type}
-                        {s.runtime ? ` · ${s.runtime}s` : ""}
+                    {s.personas.map((p) => (
+                      <Chip key={p} className="bg-surface-2 text-ink-3">
+                        {p}
                       </Chip>
-                    )}
+                    ))}
+                    {s.format && <Chip className="bg-surface-2 text-muted">{s.format}</Chip>}
                   </span>
                 </span>
                 <span>
-                  <Chip className={STAGE_TONE[s.stage]}>{STAGE_LABEL[s.stage]}</Chip>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-0.5 text-[11px] font-medium ${STAGE[s.stage].tone}`}
+                  >
+                    <i className={`h-1.5 w-1.5 rounded-full ${STAGE[s.stage].dot}`} />
+                    {STAGE[s.stage].label}
+                  </span>
                 </span>
                 <span className="truncate text-ink-2">{s.writer}</span>
                 <span className="truncate text-ink-3">{s.creator ?? "—"}</span>
@@ -189,7 +199,8 @@ export function ScriptsClient({
         <ScriptDrawer
           id={openId}
           creators={creators}
-          angles={data.angles}
+          taxonomy={taxonomy}
+          perms={perms}
           onClose={() => setOpenId(null)}
           onChanged={() => router.refresh()}
         />
@@ -197,7 +208,7 @@ export function ScriptsClient({
 
       <NewScriptModal
         open={creating}
-        angles={data.angles}
+        angles={taxonomy.angles.map((a) => ({ id: a.id, label: a.label }))}
         onClose={() => setCreating(false)}
         onCreated={(id) => {
           setCreating(false);
@@ -263,7 +274,7 @@ function NewScriptModal({
   const submit = () => {
     setErr(null);
     start(async () => {
-      const res = await createScript({ title, hookLine: hook, angleId, type });
+      const res = await createScript({ title, hookLine: hook, angleId });
       if (!res.ok) return setErr(res.error ?? "Couldn't create the script.");
       setTitle("");
       setHook("");

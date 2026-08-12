@@ -1,7 +1,12 @@
+import type { Permission } from "@/lib/auth/permissions";
+
 /**
- * Script pipeline vocabulary — labels, tones and transitions. Client-safe by
- * design (same role as lib/status.ts and lib/score.ts): the drawer and the list
- * both need these, so they must not live behind `server-only`.
+ * Script pipeline vocabulary. Client-safe by design (same role as lib/status.ts
+ * and lib/score.ts) — the list, the tiles and the drawer all read from here.
+ *
+ * The action label and the permission are per-stage, straight from the design
+ * prototype's `scriptStageDefs()`. The gate matters: approving a script needs
+ * `master`, NOT `script`, so a writer cannot approve their own work.
  */
 export type ScriptStage =
   | "draft"
@@ -11,22 +16,70 @@ export type ScriptStage =
   | "creators"
   | "received";
 
-/** The advance path. `reject` always returns to `changes`, from anywhere. */
-export const STAGE_ORDER: ScriptStage[] = [
-  "draft",
-  "review",
-  "approved",
-  "creators",
-  "received",
-];
+type StageDef = {
+  label: string;
+  /** What the primary button says when a script is sitting in this stage. */
+  action: string;
+  /** Stage it moves to. Null = end of the pipeline. */
+  next: ScriptStage | null;
+  /** Permission required to make that move. */
+  gate: Permission | null;
+  /** Pill classes — text + background. */
+  tone: string;
+  /** Dot colour inside the pill. */
+  dot: string;
+};
 
-export const STAGE_LABEL: Record<ScriptStage, string> = {
-  draft: "Draft",
-  review: "In review",
-  changes: "Changes",
-  approved: "Approved",
-  creators: "With content",
-  received: "Creative received",
+export const STAGE: Record<ScriptStage, StageDef> = {
+  draft: {
+    label: "Draft",
+    action: "Send for review",
+    next: "review",
+    gate: "script",
+    tone: "text-ink-3 bg-line-2",
+    dot: "bg-muted",
+  },
+  review: {
+    label: "In review",
+    action: "Approve script",
+    next: "approved",
+    // Deliberately `master`: the writer submits, someone else approves.
+    gate: "master",
+    tone: "text-amber bg-amber-bg",
+    dot: "bg-amber",
+  },
+  changes: {
+    label: "Changes",
+    action: "Resubmit for review",
+    next: "review",
+    gate: "script",
+    tone: "text-red bg-red-bg",
+    dot: "bg-red",
+  },
+  approved: {
+    label: "Approved",
+    action: "Submit to content",
+    next: "creators",
+    gate: "script",
+    tone: "text-green bg-green-bg",
+    dot: "bg-green",
+  },
+  creators: {
+    label: "With content",
+    action: "Mark creative received",
+    next: "received",
+    gate: "script",
+    tone: "text-brand-deep bg-brand-chip",
+    dot: "bg-brand",
+  },
+  received: {
+    label: "Creative received",
+    action: "",
+    next: null,
+    gate: null,
+    tone: "text-ink-2 bg-line-2",
+    dot: "bg-muted",
+  },
 };
 
 /** Tile order on screen — the pipeline as a person reads it. */
@@ -39,19 +92,18 @@ export const STAGE_TILES: ScriptStage[] = [
   "received",
 ];
 
-export const STAGE_TONE: Record<ScriptStage, string> = {
-  draft: "text-ink-3 bg-line-2",
-  review: "text-amber bg-amber-bg",
-  changes: "text-red bg-red-bg",
-  approved: "text-green bg-green-bg",
-  creators: "text-brand-deep bg-brand-chip",
-  received: "text-muted bg-line-2",
-};
+export const STAGE_LABEL = Object.fromEntries(
+  Object.entries(STAGE).map(([k, v]) => [k, v.label]),
+) as Record<ScriptStage, string>;
 
-/** What `Advance` does next, or null at the end of the pipeline. */
+export const STAGE_TONE = Object.fromEntries(
+  Object.entries(STAGE).map(([k, v]) => [k, v.tone]),
+) as Record<ScriptStage, string>;
+
 export function nextStage(stage: ScriptStage): ScriptStage | null {
-  if (stage === "draft" || stage === "changes") return "review";
-  const i = STAGE_ORDER.indexOf(stage);
-  if (i === -1 || i === STAGE_ORDER.length - 1) return null;
-  return STAGE_ORDER[i + 1];
+  return STAGE[stage].next;
 }
+
+/** Stages where the wording is still open. Past that it is out being shot. */
+export const EDITABLE_STAGES: ScriptStage[] = ["draft", "changes", "review", "approved"];
+export const isEditable = (s: ScriptStage) => EDITABLE_STAGES.includes(s);

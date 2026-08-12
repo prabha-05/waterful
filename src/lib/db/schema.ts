@@ -231,9 +231,14 @@ export const scripts = pgTable("scripts", {
   body: text("body").notNull().default(""),
   noteTitle: text("note_title"),
   noteTone: text("note_tone"),
+  // Full taxonomy, decided when the script is written — the creative inherits
+  // all of it at upload rather than being re-tagged from memory.
   angleId: uuid("angle_id").references(() => angles.id),
-  personaId: uuid("persona_id").references(() => personas.id),
-  type: text("type"), // Video | Static | Carousel — intended format
+  typeId: uuid("type_id").references(() => types.id),
+  subtypeId: uuid("subtype_id").references(() => subtypes.id),
+  awarenessId: uuid("awareness_id").references(() => awarenessStages.id),
+  hookId: uuid("hook_id").references(() => hookTypes.id),
+  type: text("type"), // legacy free-text format label, superseded by typeId
   runtime: integer("runtime"), // seconds
   words: integer("words").notNull().default(0),
   version: integer("version").notNull().default(1),
@@ -245,6 +250,20 @@ export const scripts = pgTable("scripts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Personas are many per script, mapped to the chosen angle — same as creatives. */
+export const scriptPersonas = pgTable(
+  "script_personas",
+  {
+    scriptId: uuid("script_id")
+      .notNull()
+      .references(() => scripts.id, { onDelete: "cascade" }),
+    personaId: uuid("persona_id")
+      .notNull()
+      .references(() => personas.id),
+  },
+  (t) => [primaryKey({ columns: [t.scriptId, t.personaId] })],
+);
 
 /** Append-only trail of every transition and edit, so the history survives. */
 export const scriptActivity = pgTable("script_activity", {

@@ -35,10 +35,14 @@ export function ApprovedScripts({ scripts }: { scripts: ScriptRow[] }) {
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 {s.angle && <Chip className="bg-brand-chip text-brand-deep">{s.angle}</Chip>}
-                {s.persona && <Chip className="bg-surface-2 text-ink-3">{s.persona}</Chip>}
-                {s.type && (
+                {s.personas.map((p) => (
+                  <Chip key={p} className="bg-surface-2 text-ink-3">
+                    {p}
+                  </Chip>
+                ))}
+                {s.format && (
                   <Chip className="bg-surface-2 text-muted">
-                    {s.type}
+                    {s.format}
                     {s.runtime ? ` · ${s.runtime}s` : ""}
                   </Chip>
                 )}

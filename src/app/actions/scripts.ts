@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { scriptActivity, scripts } from "@/lib/db/schema";
+import { scriptActivity, scriptPersonas, scripts } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
-import { nextStage, STAGE_LABEL, type ScriptStage } from "@/lib/script-stage";
+import { STAGE, isEditable, type ScriptStage } from "@/lib/script-stage";
 
 export type ScriptResult = { ok: boolean; error?: string; id?: string };
 
@@ -29,13 +29,19 @@ async function nextCode(): Promise<string> {
   return `SCR-${String(n).padStart(4, "0")}`;
 }
 
+/** New scripts open on a timecoded skeleton rather than an empty box. */
+const STARTER_BODY = ["0:00  HOOK — ", "", "0:06  PROBLEM", "", "0:30  CTA", ""].join("\n");
+
 export async function createScript(input: {
   title: string;
   hookLine?: string;
   body?: string;
   angleId?: string | null;
-  personaId?: string | null;
-  type?: string | null;
+  typeId?: string | null;
+  subtypeId?: string | null;
+  awarenessId?: string | null;
+  hookId?: string | null;
+  personaIds?: string[];
 }): Promise<ScriptResult> {
   let user;
   try {
@@ -46,7 +52,7 @@ export async function createScript(input: {
   const title = input.title.trim();
   if (!title) return { ok: false, error: "Give the script a title." };
 
-  const body = input.body ?? "";
+  const body = input.body ?? STARTER_BODY;
   const words = countWords(body);
 
   const [row] = await db
@@ -59,12 +65,20 @@ export async function createScript(input: {
       words,
       runtime: words > 0 ? runtimeOf(words) : null,
       angleId: input.angleId || null,
-      personaId: input.personaId || null,
-      type: input.type || null,
+      typeId: input.typeId || null,
+      subtypeId: input.subtypeId || null,
+      awarenessId: input.awarenessId || null,
+      hookId: input.hookId || null,
       writerId: user.id,
       stage: "draft",
     })
     .returning({ id: scripts.id, code: scripts.code });
+
+  if (input.personaIds?.length) {
+    await db
+      .insert(scriptPersonas)
+      .values(input.personaIds.map((personaId) => ({ scriptId: row.id, personaId })));
+  }
 
   await log(row.id, user.id, `Created ${row.code} as a draft`);
   revalidatePath("/scripts");
@@ -80,8 +94,11 @@ export async function updateScript(
     noteTitle?: string | null;
     noteTone?: string | null;
     angleId?: string | null;
-    personaId?: string | null;
-    type?: string | null;
+    typeId?: string | null;
+    subtypeId?: string | null;
+    awarenessId?: string | null;
+    hookId?: string | null;
+    personaIds?: string[];
   },
 ): Promise<ScriptResult> {
   let user;
@@ -95,8 +112,11 @@ export async function updateScript(
   if (!current) return { ok: false, error: "Script not found." };
   // Once it is out with a creator the wording is fixed — otherwise someone
   // shoots one version while the library shows another.
-  if (current.stage === "creators" || current.stage === "received") {
-    return { ok: false, error: `Can't edit a script that is ${STAGE_LABEL[current.stage].toLowerCase()}.` };
+  if (!isEditable(current.stage as ScriptStage)) {
+    return {
+      ok: false,
+      error: `Can't edit a script that is ${STAGE[current.stage as ScriptStage].label.toLowerCase()}.`,
+    };
   }
 
   const body = input.body ?? current.body;
@@ -114,13 +134,26 @@ export async function updateScript(
       noteTitle: input.noteTitle === undefined ? current.noteTitle : input.noteTitle,
       noteTone: input.noteTone === undefined ? current.noteTone : input.noteTone,
       angleId: input.angleId === undefined ? current.angleId : input.angleId || null,
-      personaId: input.personaId === undefined ? current.personaId : input.personaId || null,
-      type: input.type === undefined ? current.type : input.type || null,
+      typeId: input.typeId === undefined ? current.typeId : input.typeId || null,
+      subtypeId: input.subtypeId === undefined ? current.subtypeId : input.subtypeId || null,
+      awarenessId:
+        input.awarenessId === undefined ? current.awarenessId : input.awarenessId || null,
+      hookId: input.hookId === undefined ? current.hookId : input.hookId || null,
       // A rewrite after rejection is a new version — that is what "v3" means.
       version: bodyChanged && current.stage === "changes" ? current.version + 1 : current.version,
       updatedAt: new Date(),
     })
     .where(eq(scripts.id, id));
+
+  // Personas are replaced wholesale, same as the creative editor does.
+  if (input.personaIds) {
+    await db.delete(scriptPersonas).where(eq(scriptPersonas.scriptId, id));
+    if (input.personaIds.length) {
+      await db
+        .insert(scriptPersonas)
+        .values(input.personaIds.map((personaId) => ({ scriptId: id, personaId })));
+    }
+  }
 
   if (bodyChanged) await log(id, user.id, "Edited the script");
   revalidatePath("/scripts");
@@ -129,18 +162,30 @@ export async function updateScript(
 
 /** draft|changes → review → approved → creators → received. */
 export async function advanceScript(id: string, creatorId?: string): Promise<ScriptResult> {
-  let user;
-  try {
-    user = await requirePermission("script");
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
 
-  const to = nextStage(current.stage as ScriptStage);
-  if (!to) return { ok: false, error: "This script is already at the end of the pipeline." };
+  const from = current.stage as ScriptStage;
+  const def = STAGE[from];
+  const to = def.next;
+  if (!to || !def.gate) {
+    return { ok: false, error: "This script is already at the end of the pipeline." };
+  }
+
+  // The gate is per-stage. Approving needs `master` — a writer submits their
+  // script, someone else approves it.
+  let user;
+  try {
+    user = await requirePermission(def.gate);
+  } catch {
+    return {
+      ok: false,
+      error:
+        def.gate === "master"
+          ? "Only someone who can manage master data may approve a script."
+          : `Not authorized — missing "${def.gate}" permission.`,
+    };
+  }
   // "With content" means a named person is holding it; without that the stage
   // says nothing useful.
   if (to === "creators" && !creatorId) {
@@ -156,11 +201,7 @@ export async function advanceScript(id: string, creatorId?: string): Promise<Scr
     })
     .where(eq(scripts.id, id));
 
-  await log(
-    id,
-    user.id,
-    `Moved from ${STAGE_LABEL[current.stage as ScriptStage]} to ${STAGE_LABEL[to]}`,
-  );
+  await log(id, user.id, `${def.action} — moved to ${STAGE[to].label}`);
   revalidatePath("/scripts");
   revalidatePath("/library");
   return { ok: true };
@@ -190,7 +231,7 @@ export async function rejectScript(id: string, reason?: string): Promise<ScriptR
     user.id,
     note
       ? `Sent back for changes — ${note}`
-      : `Sent back for changes from ${STAGE_LABEL[current.stage as ScriptStage]}`,
+      : `Requested changes from ${STAGE[current.stage as ScriptStage].label}`,
   );
   revalidatePath("/scripts");
   return { ok: true };
@@ -211,6 +252,37 @@ export async function deleteScript(id: string): Promise<ScriptResult> {
   await db.delete(scripts).where(eq(scripts.id, id));
   revalidatePath("/scripts");
   return { ok: true };
+}
+
+/**
+ * The tagging a creative inherits when it is uploaded against a script —
+ * "the creative inherits all of it". Returns null when the script carries no
+ * usable classification, in which case the upload form stands on its own.
+ */
+export async function getScriptTagging(scriptId: string): Promise<{
+  angleId: string | null;
+  typeId: string | null;
+  subtypeId: string | null;
+  awarenessId: string | null;
+  hookId: string | null;
+  personaIds: string[];
+  title: string;
+} | null> {
+  const [s] = await db.select().from(scripts).where(eq(scripts.id, scriptId));
+  if (!s) return null;
+  const rows = await db
+    .select({ personaId: scriptPersonas.personaId })
+    .from(scriptPersonas)
+    .where(eq(scriptPersonas.scriptId, scriptId));
+  return {
+    angleId: s.angleId,
+    typeId: s.typeId,
+    subtypeId: s.subtypeId,
+    awarenessId: s.awarenessId,
+    hookId: s.hookId,
+    personaIds: rows.map((r) => r.personaId),
+    title: s.title,
+  };
 }
 
 /**

@@ -1,26 +1,27 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { STAGE_LABEL, STAGE_TONE, nextStage, type ScriptStage } from "@/lib/script-stage";
+import { STAGE, isEditable, type ScriptStage } from "@/lib/script-stage";
 import type { ScriptDetail } from "@/lib/data/scripts";
+import type { Taxonomy } from "@/lib/data/taxonomy";
+import type { Permissions } from "@/lib/auth/permissions";
 import { advanceScript, rejectScript, updateScript } from "@/app/actions/scripts";
 import { fetchScript } from "@/app/actions/script-read";
-import { Button, Chip, Drawer, Field, Input, Select, Textarea } from "@/components/ui/primitives";
+import { Button, Drawer, Select, Textarea } from "@/components/ui/primitives";
 import { useDate } from "@/components/providers/settings-provider";
-
-/** Stages where the wording is still open. Past that it is out being shot. */
-const EDITABLE: ScriptStage[] = ["draft", "changes", "review", "approved"];
 
 export function ScriptDrawer({
   id,
   creators,
-  angles,
+  taxonomy,
+  perms,
   onClose,
   onChanged,
 }: {
   id: string;
   creators: { id: string; name: string }[];
-  angles: { id: string; label: string }[];
+  taxonomy: Taxonomy;
+  perms: Permissions;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -30,11 +31,16 @@ export function ScriptDrawer({
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  // local edit buffer
+  // edit buffer
   const [title, setTitle] = useState("");
   const [hook, setHook] = useState("");
   const [body, setBody] = useState("");
   const [angleId, setAngleId] = useState("");
+  const [typeId, setTypeId] = useState("");
+  const [subtypeId, setSubtypeId] = useState("");
+  const [awarenessId, setAwarenessId] = useState("");
+  const [hookId, setHookId] = useState("");
+  const [personaIds, setPersonaIds] = useState<string[]>([]);
   const [creatorId, setCreatorId] = useState("");
   const [dirty, setDirty] = useState(false);
 
@@ -46,6 +52,11 @@ export function ScriptDrawer({
       setHook(s.hookLine);
       setBody(s.body);
       setAngleId(s.angleId ?? "");
+      setTypeId(s.typeId ?? "");
+      setSubtypeId(s.subtypeId ?? "");
+      setAwarenessId(s.awarenessId ?? "");
+      setHookId(s.hookId ?? "");
+      setPersonaIds(s.personaIds);
       setCreatorId(s.creatorId ?? "");
       setDirty(false);
     }
@@ -57,6 +68,11 @@ export function ScriptDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const touch = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setDirty(true);
+  };
+
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setErr(null);
     start(async () => {
@@ -67,67 +83,101 @@ export function ScriptDrawer({
     });
   };
 
-  const editable = script ? EDITABLE.includes(script.stage) : false;
-  const to = script ? nextStage(script.stage) : null;
-  const needsCreator = to === "creators";
+  const stage = script?.stage as ScriptStage | undefined;
+  const def = stage ? STAGE[stage] : null;
+  const editable = stage ? isEditable(stage) : false;
+  const canEdit = editable && perms.script;
+  // The gate is per-stage: approving needs `master`, everything else `script`.
+  const canAdvance = def?.gate ? perms[def.gate] : false;
+  const needsCreator = def?.next === "creators";
+
+  // Personas offered are those mapped to the chosen angle (same rule as upload).
+  const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
+  const allowedPersonas = angleId ? taxonomy.personas.filter((p) => allowedIds.has(p.id)) : [];
+  const subtypes = taxonomy.types.find((t) => t.id === typeId)?.subtypes ?? [];
 
   const download = () => {
     if (!script) return;
-    const lines = [
+    const text = [
       script.title,
       `${script.code} · v${script.version} · ${script.writer}`,
-      [script.angle, script.persona, script.type, script.runtime ? `${script.runtime}s` : null]
+      [script.angle, script.personas.join(", "), script.format, script.runtime ? `${script.runtime}s` : null]
         .filter(Boolean)
         .join(" · "),
       "",
-      script.hookLine ? `HOOK: ${script.hookLine}` : "",
+      script.hookLine ? `HOOK — ${script.hookLine}` : "",
       "",
       script.body,
       "",
-      script.noteTitle ? `NOTE — ${script.noteTitle}${script.noteTone ? ` (${script.noteTone})` : ""}` : "",
+      script.noteTitle
+        ? `NOTE — ${script.noteTitle}${script.noteTone ? ` (${script.noteTone})` : ""}`
+        : "",
       "",
       `Written by ${script.writer} · updated ${new Date(script.updatedAt).toLocaleDateString("en-IN")}`,
-    ];
-    const blob = new Blob([lines.filter((l) => l !== undefined).join("\n")], {
-      type: "text/plain;charset=utf-8",
-    });
+    ].join("\n");
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     a.download = `${script.code} ${script.title}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
+  const save = () =>
+    run(() =>
+      updateScript(id, {
+        title,
+        hookLine: hook,
+        body,
+        angleId,
+        typeId,
+        subtypeId,
+        awarenessId,
+        hookId,
+        personaIds,
+      }),
+    );
+
   return (
-    <Drawer open onClose={onClose} width={640}>
-      {loading || !script ? (
+    <Drawer open onClose={onClose} width={720}>
+      {loading || !script || !def ? (
         <div className="p-6 text-sm text-muted">{loading ? "Loading…" : "Script not found."}</div>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[11px] text-muted">{script.code}</span>
-                <Chip className={STAGE_TONE[script.stage]}>{STAGE_LABEL[script.stage]}</Chip>
-                <span className="font-mono text-[11px] text-muted">v{script.version}</span>
+          {/* ---- header ------------------------------------------------- */}
+          <div className="border-b border-line px-5 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-0.5 text-[11px] font-medium ${def.tone}`}
+                >
+                  <i className={`h-1.5 w-1.5 rounded-full ${def.dot}`} />
+                  {def.label}
+                </span>
+                <span className="font-mono text-[11px] text-muted">
+                  {script.code} · v{script.version}
+                </span>
               </div>
-              <h2 className="mt-1 truncate text-base font-bold text-ink">{script.title}</h2>
-              <p className="text-[11px] text-muted">
-                {script.writer} · {script.words} words
-                {script.runtime ? ` · ~${script.runtime}s` : ""}
-              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" onClick={download}>
+                  ⬇ Download
+                </Button>
+                <button onClick={onClose} className="text-muted hover:text-ink" aria-label="Close">
+                  ✕
+                </button>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="secondary" onClick={download}>
-                ⬇ Download
-              </Button>
-              <button onClick={onClose} className="text-muted hover:text-ink">
-                ✕
-              </button>
-            </div>
+            <input
+              value={title}
+              disabled={!canEdit}
+              onChange={(e) => touch(setTitle)(e.target.value)}
+              className="mt-3 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-3 py-2 text-base font-bold text-ink outline-none focus:border-brand disabled:border-transparent disabled:bg-transparent disabled:px-0"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              Written by {script.writer} · updated {fmtDate(script.updatedAt)}
+            </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex-1 overflow-y-auto bg-background px-5 py-4">
             <div className="flex flex-col gap-4">
               {script.creative && (
                 <div className="rounded-[var(--radius-control)] bg-green-bg px-3 py-2 text-sm text-green">
@@ -135,106 +185,221 @@ export function ScriptDrawer({
                 </div>
               )}
 
-              <Field label="Title">
-                <Input
-                  value={title}
-                  disabled={!editable}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    setDirty(true);
-                  }}
-                />
-              </Field>
+              {/* ---- tagging ------------------------------------------- */}
+              <section className="rounded-[var(--radius-card)] border border-line bg-surface p-4">
+                <h3 className="text-sm font-semibold text-ink">
+                  Tagging{" "}
+                  <span className="font-normal text-muted">
+                    · from Master Data · the creative inherits all of it
+                  </span>
+                </h3>
 
-              <Field label="Hook line">
-                <Input
+                <div className="mt-3 flex flex-col gap-3">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[13px] font-medium text-ink-2">Angle</span>
+                    <Select
+                      value={angleId}
+                      disabled={!canEdit}
+                      onChange={(e) => {
+                        touch(setAngleId)(e.target.value);
+                        setPersonaIds([]); // personas are mapped to the angle
+                      }}
+                    >
+                      <option value="">Not decided yet</option>
+                      {taxonomy.angles.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[13px] font-medium text-ink-2">
+                      Personas{" "}
+                      <span className="font-normal text-muted">
+                        · mapped to the angle · pick one or more
+                      </span>
+                    </span>
+                    {!angleId ? (
+                      <p className="text-sm text-muted">Choose an angle first.</p>
+                    ) : allowedPersonas.length === 0 ? (
+                      <p className="text-sm text-muted">No personas mapped to this angle yet.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {allowedPersonas.map((p) => {
+                          const on = personaIds.includes(p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              disabled={!canEdit}
+                              aria-pressed={on}
+                              onClick={() =>
+                                touch(setPersonaIds)(
+                                  on ? personaIds.filter((x) => x !== p.id) : [...personaIds, p.id],
+                                )
+                              }
+                              className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
+                                on
+                                  ? "border-brand bg-brand-chip text-brand-deep"
+                                  : "border-line bg-surface text-ink-3 hover:bg-surface-2"
+                              } disabled:opacity-60`}
+                            >
+                              {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[13px] font-medium text-ink-2">Type</span>
+                      <Select
+                        value={typeId}
+                        disabled={!canEdit}
+                        onChange={(e) => {
+                          touch(setTypeId)(e.target.value);
+                          setSubtypeId("");
+                        }}
+                      >
+                        <option value="">—</option>
+                        {taxonomy.types.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[13px] font-medium text-ink-2">Sub-type</span>
+                      <Select
+                        value={subtypeId}
+                        disabled={!canEdit || !typeId}
+                        onChange={(e) => touch(setSubtypeId)(e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {subtypes.map((st) => (
+                          <option key={st.id} value={st.id}>
+                            {st.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[13px] font-medium text-ink-2">Awareness stage</span>
+                      <Select
+                        value={awarenessId}
+                        disabled={!canEdit}
+                        onChange={(e) => touch(setAwarenessId)(e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {taxonomy.awareness.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[13px] font-medium text-ink-2">Hook type</span>
+                      <Select
+                        value={hookId}
+                        disabled={!canEdit}
+                        onChange={(e) => touch(setHookId)(e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {taxonomy.hooks.map((h) => (
+                          <option key={h.id} value={h.id}>
+                            {h.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              {/* ---- hook line ----------------------------------------- */}
+              <section className="rounded-[var(--radius-card)] border border-line bg-surface p-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Hook{script.hook ? ` · ${script.hook}` : ""}
+                </p>
+                <input
                   value={hook}
-                  disabled={!editable}
-                  onChange={(e) => {
-                    setHook(e.target.value);
-                    setDirty(true);
-                  }}
+                  disabled={!canEdit}
+                  placeholder="The first line the viewer hears"
+                  onChange={(e) => touch(setHook)(e.target.value)}
+                  className="mt-1 w-full bg-transparent text-sm text-ink-2 outline-none placeholder:text-muted"
                 />
-              </Field>
+              </section>
 
-              <Field label="Angle">
-                <Select
-                  value={angleId}
-                  disabled={!editable}
-                  onChange={(e) => {
-                    setAngleId(e.target.value);
-                    setDirty(true);
-                  }}
-                >
-                  <option value="">Not decided yet</option>
-                  {angles.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              {/* ---- the script ---------------------------------------- */}
+              <section className="rounded-[var(--radius-card)] border border-line bg-surface">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+                  <h3 className="text-sm font-semibold text-ink">Script</h3>
+                  <span className="font-mono text-[11px] text-muted">
+                    {script.words} words · {script.runtime ? `${script.runtime}s` : "—"}
+                    {script.format ? ` · ${script.format}` : ""}
+                  </span>
+                </div>
+                <div className="p-3">
+                  <Textarea
+                    rows={16}
+                    value={body}
+                    disabled={!canEdit}
+                    placeholder="The full script, as the creator will read it."
+                    onChange={(e) => touch(setBody)(e.target.value)}
+                    className="font-mono text-[13px] leading-relaxed"
+                  />
+                </div>
+              </section>
 
-              <Field label="Script">
-                <Textarea
-                  rows={14}
-                  value={body}
-                  disabled={!editable}
-                  placeholder="The full script, as the creator will read it."
-                  onChange={(e) => {
-                    setBody(e.target.value);
-                    setDirty(true);
-                  }}
-                />
-              </Field>
-
-              {dirty && editable && (
+              {dirty && canEdit && (
                 <div className="flex justify-end">
-                  <Button
-                    onClick={() =>
-                      run(() => updateScript(id, { title, hookLine: hook, body, angleId }))
-                    }
-                    disabled={pending}
-                  >
+                  <Button onClick={save} disabled={pending}>
                     {pending ? "Saving…" : "Save changes"}
                   </Button>
                 </div>
               )}
 
-              {!editable && (
-                <p className="text-[11px] text-muted">
-                  This script is {STAGE_LABEL[script.stage].toLowerCase()} — the wording is locked so
-                  the version being shot can&apos;t drift from the version here.
-                </p>
-              )}
-
-              {/* ---- activity trail ---------------------------------- */}
-              <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">Activity</h3>
+              {/* ---- activity ------------------------------------------ */}
+              <section className="rounded-[var(--radius-card)] border border-line bg-surface">
+                <h3 className="border-b border-line px-4 py-3 text-sm font-semibold text-ink">
+                  Activity
+                </h3>
                 {script.activity.length === 0 ? (
-                  <p className="text-sm text-muted">Nothing logged yet.</p>
+                  <p className="px-4 py-3 text-sm text-muted">Nothing logged yet.</p>
                 ) : (
-                  <ul className="flex flex-col gap-3">
+                  <ul className="flex flex-col divide-y divide-line-2">
                     {script.activity.map((a, i) => (
-                      <li key={i} className="border-b border-line-2 pb-3 last:border-0">
-                        <p className="text-[11px] text-muted">
-                          {fmtDate(a.at)} · {a.actor}
-                        </p>
-                        <p className="mt-0.5 text-sm text-ink-2">{a.text}</p>
+                      <li key={i} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
+                        <span className="text-sm text-ink-2">
+                          <span className="font-medium text-ink">{a.actor}</span> {a.text}
+                        </span>
+                        <span className="shrink-0 font-mono text-[11px] text-muted">
+                          {fmtDate(a.at)}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
+              </section>
             </div>
           </div>
 
-          {/* ---- pipeline actions --------------------------------------- */}
-          <div className="border-t border-line px-5 py-3">
+          {/* ---- pipeline actions ------------------------------------- */}
+          <div className="border-t border-line bg-surface px-5 py-3">
             {err && <p className="mb-2 text-sm text-red">{err}</p>}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] text-muted">
-                {to ? `Next: ${STAGE_LABEL[to]}` : "End of the pipeline"}
+                {!perms.script
+                  ? "Editing and submitting require Write scripts."
+                  : def.next
+                    ? `Next: ${STAGE[def.next].label}`
+                    : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {needsCreator && (
@@ -251,21 +416,26 @@ export function ScriptDrawer({
                     ))}
                   </Select>
                 )}
-                {script.stage !== "changes" && script.stage !== "draft" && (
+                {perms.script && stage !== "changes" && stage !== "draft" && (
                   <Button
                     variant="danger"
                     disabled={pending}
                     onClick={() => run(() => rejectScript(id))}
                   >
-                    Send back
+                    Request changes
                   </Button>
                 )}
-                {to && (
+                {def.next && (
                   <Button
-                    disabled={pending || (needsCreator && !creatorId)}
+                    disabled={pending || !canAdvance || (needsCreator && !creatorId)}
+                    title={
+                      !canAdvance && def.gate === "master"
+                        ? "Only someone who can manage master data may approve a script."
+                        : undefined
+                    }
                     onClick={() => run(() => advanceScript(id, creatorId || undefined))}
                   >
-                    {pending ? "Working…" : `Advance to ${STAGE_LABEL[to]}`}
+                    {pending ? "Working…" : def.action}
                   </Button>
                 )}
               </div>
