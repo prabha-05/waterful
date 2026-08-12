@@ -30,6 +30,12 @@ services:
         sync: false
       - key: META_ACCESS_TOKEN
         sync: false
+      # Shopify — revenue by state, which Meta will not report at all.
+      # Absent → the sync still succeeds and simply skips the store refresh.
+      - key: SHOPIFY_STORE_URL
+        sync: false
+      - key: SHOPIFY_ACCESS_TOKEN
+        sync: false
 
   # 2) Meta sync — daily 06:00 cron (decisions §6: every day 6 AM, last 28 days).
   - type: cron
@@ -48,4 +54,10 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: META_ACCESS_TOKEN
+        sync: false
+      # Shopify — revenue by state, which Meta will not report at all.
+      # Absent → the sync still succeeds and simply skips the store refresh.
+      - key: SHOPIFY_STORE_URL
+        sync: false
+      - key: SHOPIFY_ACCESS_TOKEN
         sync: false

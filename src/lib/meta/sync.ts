@@ -1,4 +1,13 @@
-import "server-only";
+/*
+ * Deliberately NOT marked `server-only`. This runner is shared by two callers:
+ * the in-app Meta Sync console (a server action) and the standalone Render cron
+ * worker, which runs under tsx with no Next.js resolver. `server-only` is not a
+ * real dependency — Next supplies it at build time — so importing it here made
+ * the worker die on startup with "Cannot find module 'server-only'". That is why
+ * no automatic sync ran between 13 July and 12 August 2026.
+ *
+ * Nothing client-side imports this module; the guard was never load-bearing.
+ */
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -11,6 +20,7 @@ import {
   types,
 } from "@/lib/db/schema";
 import { fetchMetaData } from "@/lib/meta";
+import { refreshShopifyRevenue } from "@/lib/shopify/sync";
 
 export type SyncKind = "auto" | "manual" | "rebuild";
 export type SyncWindow = "28d" | "full";
@@ -152,6 +162,22 @@ export async function runMetaSync(
 
       count++;
     }
+
+    // Shopify revenue rides along with the Meta pull. Without this the
+    // revenue-by-state figures freeze at whenever they were last loaded and go
+    // quietly, invisibly stale — worse than being absent, because people make
+    // budget calls on them. A Shopify failure must NOT fail the Meta sync, so
+    // the outcome is logged and swallowed.
+    let shopify = "";
+    try {
+      const res = await refreshShopifyRevenue(window === "full" ? new Date("2026-05-01") : since);
+      if (!res.ok) shopify = `shopify failed: ${res.error}`;
+      else if (res.skipped) shopify = `shopify skipped (${res.reason})`;
+      else shopify = `shopify: ${res.attributed}/${res.orders} orders attributed`;
+    } catch (e) {
+      shopify = `shopify threw: ${(e as Error).message}`;
+    }
+    console.log(`[sync] ${count} ads · ${shopify}`);
 
     await db
       .update(syncRuns)
