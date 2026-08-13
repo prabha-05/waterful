@@ -391,12 +391,13 @@ export function ScriptDrawer({
                 )}
                 <div className="p-3">
                   <Textarea
-                    rows={16}
                     value={body}
                     disabled={!canEdit}
                     placeholder="The full script, as the creator will read it."
                     onChange={(e) => touch(setBody)(e.target.value)}
-                    className="font-mono text-[13px] leading-relaxed"
+                    // The script is the point of this screen — give it real room
+                    // and a mono face so the timecode column lines up.
+                    className="min-h-[460px] resize-y font-mono text-[13px] leading-[1.7] disabled:bg-surface"
                   />
                 </div>
               </section>

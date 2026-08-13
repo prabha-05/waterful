@@ -186,14 +186,27 @@ export function Field({
 const controlClass =
   "h-10 w-full rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-3 text-sm text-ink outline-none focus:border-brand disabled:bg-surface-2 disabled:text-muted";
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={controlClass} {...props} />;
+/**
+ * `className` is MERGED, not replaced. Spreading `{...props}` after a literal
+ * `className=` silently overwrites the whole control style — a caller adding
+ * `font-mono` would lose `w-full`, the border and the padding, and the browser
+ * would fall back to a default ~20-column box. `Select` always merged; these
+ * two did not, which is exactly the bug it caused.
+ */
+export function Input({
+  className,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={cn(controlClass, className)} {...props} />;
 }
 
-export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({
+  className,
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={cn(controlClass, "h-auto min-h-20 py-2 leading-relaxed")}
+      className={cn(controlClass, "h-auto min-h-20 py-2 leading-relaxed", className)}
       {...props}
     />
   );
