@@ -99,6 +99,7 @@ export async function updateScript(
     awarenessId?: string | null;
     hookId?: string | null;
     personaIds?: string[];
+    creatorId?: string | null;
   },
 ): Promise<ScriptResult> {
   let user;
@@ -139,6 +140,7 @@ export async function updateScript(
       awarenessId:
         input.awarenessId === undefined ? current.awarenessId : input.awarenessId || null,
       hookId: input.hookId === undefined ? current.hookId : input.hookId || null,
+      creatorId: input.creatorId === undefined ? current.creatorId : input.creatorId || null,
       // A rewrite after rejection is a new version — that is what "v3" means.
       version: bodyChanged && current.stage === "changes" ? current.version + 1 : current.version,
       updatedAt: new Date(),
@@ -186,17 +188,19 @@ export async function advanceScript(id: string, creatorId?: string): Promise<Scr
           : `Not authorized — missing "${def.gate}" permission.`,
     };
   }
-  // "With content" means a named person is holding it; without that the stage
-  // says nothing useful.
-  if (to === "creators" && !creatorId) {
-    return { ok: false, error: "Pick the creator who is shooting this." };
+  // The content person is chosen before review, not after approval: the
+  // approver should see who it is for, and an approved script is then
+  // immediately actionable without a second decision.
+  const creator = creatorId || current.creatorId;
+  if (def.needsCreator && !creator) {
+    return { ok: false, error: "Choose the content person who will shoot this first." };
   }
 
   await db
     .update(scripts)
     .set({
       stage: to,
-      creatorId: to === "creators" ? creatorId! : current.creatorId,
+      creatorId: creator ?? null,
       updatedAt: new Date(),
     })
     .where(eq(scripts.id, id));

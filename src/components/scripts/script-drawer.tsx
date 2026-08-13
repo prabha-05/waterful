@@ -20,7 +20,7 @@ export function ScriptDrawer({
   onChanged,
 }: {
   id: string;
-  creators: { id: string; name: string }[];
+  creators: { id: string; name: string; role: string }[];
   taxonomy: Taxonomy;
   perms: Permissions;
   onClose: () => void;
@@ -92,7 +92,9 @@ export function ScriptDrawer({
   const canEdit = editable && perms.script;
   // The gate is per-stage: approving needs `master`, everything else `script`.
   const canAdvance = def?.gate ? perms[def.gate] : false;
-  const needsCreator = def?.next === "creators";
+  // Chosen before review, so the approver can see who is shooting it.
+  const needsCreator = def?.needsCreator === true;
+  const missingCreator = needsCreator && !creatorId;
 
   // Personas offered are those mapped to the chosen angle (same rule as upload).
   const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
@@ -152,6 +154,7 @@ export function ScriptDrawer({
         awarenessId,
         hookId,
         personaIds,
+        creatorId,
       }),
     );
 
@@ -271,6 +274,30 @@ export function ScriptDrawer({
                       </div>
                     )}
                   </div>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[13px] font-medium text-ink-2">
+                      Content person{" "}
+                      <span className="font-normal text-muted">· who will shoot this</span>
+                    </span>
+                    <Select
+                      value={creatorId}
+                      disabled={!canEdit}
+                      onChange={(e) => touch(setCreatorId)(e.target.value)}
+                    >
+                      <option value="">Not chosen yet</option>
+                      {creators.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} · {c.role}
+                        </option>
+                      ))}
+                    </Select>
+                    {missingCreator && canEdit && (
+                      <span className="text-[11px] text-amber">
+                        Needed before this can go for review.
+                      </span>
+                    )}
+                  </label>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="flex flex-col gap-1.5">
@@ -442,25 +469,13 @@ export function ScriptDrawer({
               <span className="text-[11px] text-muted">
                 {!perms.script
                   ? "Editing and submitting require Write scripts."
-                  : def.next
-                    ? `Next: ${STAGE[def.next].label}`
-                    : "End of the pipeline"}
+                  : missingCreator
+                    ? "Choose a content person above before sending for review."
+                    : def.next
+                      ? `Next: ${STAGE[def.next].label}`
+                      : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
-                {needsCreator && (
-                  <Select
-                    className="h-9 w-44"
-                    value={creatorId}
-                    onChange={(e) => setCreatorId(e.target.value)}
-                  >
-                    <option value="">Assign a creator…</option>
-                    {creators.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
                 {perms.script && stage !== "changes" && stage !== "draft" && (
                   <Button
                     variant="danger"
@@ -472,13 +487,34 @@ export function ScriptDrawer({
                 )}
                 {def.next && (
                   <Button
-                    disabled={pending || !canAdvance || (needsCreator && !creatorId)}
+                    disabled={pending || !canAdvance || missingCreator}
                     title={
                       !canAdvance && def.gate === "master"
                         ? "Only someone who can manage master data may approve a script."
                         : undefined
                     }
-                    onClick={() => run(() => advanceScript(id, creatorId || undefined))}
+                    onClick={() =>
+                      run(async () => {
+                        // Persist any unsaved tagging first, so Advance never
+                        // discards edits the writer just made.
+                        if (dirty && canEdit) {
+                          const saved = await updateScript(id, {
+                            title,
+                            hookLine: hook,
+                            body,
+                            angleId,
+                            typeId,
+                            subtypeId,
+                            awarenessId,
+                            hookId,
+                            personaIds,
+                            creatorId,
+                          });
+                          if (!saved.ok) return saved;
+                        }
+                        return advanceScript(id, creatorId || undefined);
+                      })
+                    }
                   >
                     {pending ? "Working…" : def.action}
                   </Button>

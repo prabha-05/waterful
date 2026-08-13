@@ -20,7 +20,7 @@ export function ScriptsClient({
   perms,
 }: {
   data: ScriptLibrary;
-  creators: { id: string; name: string }[];
+  creators: { id: string; name: string; role: string }[];
   taxonomy: Taxonomy;
   perms: Permissions;
 }) {
@@ -53,8 +53,33 @@ export function ScriptsClient({
 
   const filtered = stage !== "all" || angle || writer || q.trim();
 
+  // Approving is gated on `master`, so only an approver is asked to approve.
+  const waiting = data.counts.review;
+  const showApprovalPrompt = perms.master && waiting > 0;
+
   return (
     <div className="flex flex-col gap-4 p-6">
+      {showApprovalPrompt && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-amber bg-amber-bg px-4 py-3">
+          <span className="text-sm font-medium text-amber">
+            {waiting === 1
+              ? "1 script is waiting for your approval."
+              : `${waiting} scripts are waiting for your approval.`}
+          </span>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setStage("review");
+              // Jump straight in when there is only one — no hunting for it.
+              const only = data.scripts.filter((x) => x.stage === "review");
+              if (only.length === 1) setOpenId(only[0].id);
+            }}
+          >
+            {waiting === 1 ? "Review it" : "Show them"}
+          </Button>
+        </div>
+      )}
+
       {/* ---- stage pipeline as filter tiles ---------------------------- */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StageTile

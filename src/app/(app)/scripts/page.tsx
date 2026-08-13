@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ScriptsClient } from "@/components/scripts/scripts-client";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getScriptLibrary } from "@/lib/data/scripts";
-import { getUsers } from "@/lib/data/access";
+import { getContentPeople, getScriptLibrary } from "@/lib/data/scripts";
 import { getTaxonomy } from "@/lib/data/taxonomy";
 
 /**
@@ -14,15 +13,11 @@ export default async function ScriptsPage() {
   const user = await getCurrentUser();
   if (!user?.permissions.script) redirect("/dashboard");
 
-  const [data, users, taxonomy] = await Promise.all([
+  const [data, creators, taxonomy] = await Promise.all([
     getScriptLibrary(),
-    getUsers(),
+    getContentPeople(),
     getTaxonomy(),
   ]);
-  // Anyone active with a role can be handed a script to shoot.
-  const creators = users
-    .filter((u) => !u.archived && u.roleLabel)
-    .map((u) => ({ id: u.id, name: u.name }));
 
   return (
     <>

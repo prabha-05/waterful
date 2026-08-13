@@ -28,6 +28,12 @@ type StageDef = {
   tone: string;
   /** Dot colour inside the pill. */
   dot: string;
+  /**
+   * Whether this move requires a named content person. The writer picks who is
+   * shooting it BEFORE it goes for review, so the approver sees who it is for
+   * and an approved script is immediately actionable.
+   */
+  needsCreator?: boolean;
 };
 
 export const STAGE: Record<ScriptStage, StageDef> = {
@@ -36,6 +42,7 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     action: "Send for review",
     next: "review",
     gate: "script",
+    needsCreator: true,
     tone: "text-ink-3 bg-line-2",
     dot: "bg-muted",
   },
@@ -53,6 +60,7 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     action: "Resubmit for review",
     next: "review",
     gate: "script",
+    needsCreator: true,
     tone: "text-red bg-red-bg",
     dot: "bg-red",
   },
