@@ -82,7 +82,11 @@ type ActionItem = { action_type: string; value: string };
 /** Pick the purchase value/count from an actions / action_values array. */
 function purchase(arr?: ActionItem[]): number {
   if (!arr) return 0;
-  const order = ["omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase"];
+  const order = [
+    "omni_purchase",
+    "purchase",
+    "offsite_conversion.fb_pixel_purchase",
+  ];
   for (const t of order) {
     const hit = arr.find((a) => a.action_type === t);
     if (hit) return Number(hit.value) || 0;
@@ -105,11 +109,84 @@ export async function fetchMetaData(
   adId: string,
   opts: { isVideo: boolean; since?: Date },
 ): Promise<MetaPull> {
-  // 1) Ad node — campaign / ad set / placement / objective / budget / status.
-  const ad = await graph(adId, {
-    fields:
-      "id,effective_status,campaign{id,name,objective,daily_budget},adset{id,name,optimization_goal,daily_budget,targeting{publisher_platforms}}",
-  });
+  // Nothing here depends on anything else here: the ad node, the daily series,
+  // the three de-duplicated reach windows and the two breakdowns are five
+  // independent requests. Running them in sequence cost ~3.2s per ad, which at
+  // 77 ads is over five minutes of a sync spent waiting on Meta. Fired together
+  // the per-ad cost collapses to roughly the slowest single call.
+  const dailyParams: GraphParams = {
+    fields: INSIGHT_FIELDS,
+    time_increment: "1",
+    limit: "500",
+  };
+  if (opts.since) {
+    dailyParams.time_range = JSON.stringify({
+      since: ymd(opts.since),
+      until: ymd(new Date()),
+    });
+  } else {
+    dailyParams.date_preset = "maximum";
+  }
+
+  // Meta rejects age+gender together with region (#100), so breakdowns are two calls.
+  const demoWindow: GraphParams = opts.since
+    ? {
+        time_range: JSON.stringify({
+          since: ymd(opts.since),
+          until: ymd(new Date()),
+        }),
+      }
+    : { date_preset: "maximum" };
+
+  async function rangeReach(range: MetaRange["range"]): Promise<MetaRange> {
+    const params: GraphParams = { fields: "reach,frequency" };
+    if (range === "lifetime") params.date_preset = "maximum";
+    else if (range === "last_7") params.date_preset = "last_7d";
+    else {
+      const until = new Date();
+      until.setDate(until.getDate() - 7);
+      const since = new Date();
+      since.setDate(since.getDate() - 13);
+      params.time_range = JSON.stringify({
+        since: ymd(since),
+        until: ymd(until),
+      });
+    }
+    const r = (await graph(`${adId}/insights`, params)).data?.[0] ?? {};
+    return {
+      range,
+      reach: Number(r.reach) || 0,
+      frequency: Number(r.frequency) || 0,
+    };
+  }
+
+  const [ad, rows, ranges, agRows, regionRows] = await Promise.all([
+    graph(adId, {
+      fields:
+        "id,effective_status,campaign{id,name,objective,daily_budget},adset{id,name,optimization_goal,daily_budget,targeting{publisher_platforms}}",
+    }),
+    graphAll(`${adId}/insights`, dailyParams),
+    Promise.all([
+      rangeReach("lifetime"),
+      rangeReach("last_7"),
+      rangeReach("prior_7"),
+    ]),
+    // A breakdown being unavailable for one ad must not fail the whole pull.
+    graphAll(`${adId}/insights`, {
+      fields: "spend,impressions,reach,clicks,actions,action_values",
+      breakdowns: "age,gender",
+      time_increment: "1",
+      limit: "500",
+      ...demoWindow,
+    }).catch(() => [] as any[]),
+    graphAll(`${adId}/insights`, {
+      fields: "spend,impressions,reach,clicks",
+      breakdowns: "region",
+      time_increment: "1",
+      limit: "500",
+      ...demoWindow,
+    }).catch(() => [] as any[]),
+  ]);
 
   const placements: string[] = ad?.adset?.targeting?.publisher_platforms ?? [];
   const campaignDaily = Number(ad?.campaign?.daily_budget ?? 0);
@@ -127,22 +204,6 @@ export async function fetchMetaData(
     optimization: ad?.adset?.optimization_goal ?? "",
   };
 
-  // 2) Daily series (additive metrics + per-day reach). time_increment=1.
-  const dailyParams: GraphParams = {
-    fields: INSIGHT_FIELDS,
-    time_increment: "1",
-    limit: "500",
-  };
-  if (opts.since) {
-    dailyParams.time_range = JSON.stringify({
-      since: ymd(opts.since),
-      until: ymd(new Date()),
-    });
-  } else {
-    dailyParams.date_preset = "maximum";
-  }
-  const rows = await graphAll(`${adId}/insights`, dailyParams);
-
   const daily: MetaDaily[] = rows.map((r) => {
     const impressions = Number(r.impressions) || 0;
     const thumb = videoValue(r.video_play_actions);
@@ -155,44 +216,18 @@ export async function fetchMetaData(
       reach: Number(r.reach) || 0,
       clicks: Number(r.clicks) || 0,
       conversions: purchase(r.actions),
-      thumbstop: opts.isVideo && impressions > 0 ? +(thumb / impressions).toFixed(4) : null,
-      hold: opts.isVideo && impressions > 0 ? +(thru / impressions).toFixed(4) : null,
+      thumbstop:
+        opts.isVideo && impressions > 0
+          ? +(thumb / impressions).toFixed(4)
+          : null,
+      hold:
+        opts.isVideo && impressions > 0
+          ? +(thru / impressions).toFixed(4)
+          : null,
     };
   });
 
-  // 3) Range-level de-duplicated reach/frequency (§6 G1) — one call per window.
-  async function rangeReach(range: MetaRange["range"]): Promise<MetaRange> {
-    const params: GraphParams = { fields: "reach,frequency" };
-    if (range === "lifetime") params.date_preset = "maximum";
-    else if (range === "last_7") params.date_preset = "last_7d";
-    else {
-      const until = new Date();
-      until.setDate(until.getDate() - 7);
-      const since = new Date();
-      since.setDate(since.getDate() - 13);
-      params.time_range = JSON.stringify({ since: ymd(since), until: ymd(until) });
-    }
-    const r = (await graph(`${adId}/insights`, params)).data?.[0] ?? {};
-    return {
-      range,
-      reach: Number(r.reach) || 0,
-      frequency: Number(r.frequency) || 0,
-    };
-  }
-
-  const ranges = await Promise.all([
-    rangeReach("lifetime"),
-    rangeReach("last_7"),
-    rangeReach("prior_7"),
-  ]);
-
-  // 4) Audience breakdowns. Meta allows age+gender together, and region on its
-  //    own — the combination is rejected (#100) — so it's two calls. age/gender
-  //    rows are folded into single-dimension totals for the simpler tabs.
-  const demoWindow: GraphParams = opts.since
-    ? { time_range: JSON.stringify({ since: ymd(opts.since), until: ymd(new Date()) }) }
-    : { date_preset: "maximum" };
-
+  // age/gender rows fold into single-dimension totals for the simpler tabs.
   const demographics: MetaDemographic[] = [];
   const bump = (
     acc: Map<string, MetaDemographic>,
@@ -206,7 +241,15 @@ export async function fetchMetaData(
     const asOfDate = String(r.date_start ?? ymd(new Date()));
     const key = `${asOfDate}|${dimension}|${segment}`;
     const cur = acc.get(key) ?? {
-      asOfDate, dimension, segment, spend: 0, revenue: 0, impressions: 0, clicks: 0, conversions: 0, reach: 0,
+      asOfDate,
+      dimension,
+      segment,
+      spend: 0,
+      revenue: 0,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      reach: 0,
     };
     cur.spend += Number(r.spend) || 0;
     cur.impressions += Number(r.impressions) || 0;
@@ -219,14 +262,7 @@ export async function fetchMetaData(
     acc.set(key, cur);
   };
 
-  try {
-    const agRows = await graphAll(`${adId}/insights`, {
-      fields: "spend,impressions,reach,clicks,actions,action_values",
-      breakdowns: "age,gender",
-      time_increment: "1",
-      limit: "500",
-      ...demoWindow,
-    });
+  {
     const acc = new Map<string, MetaDemographic>();
     for (const r of agRows) {
       const age = String(r.age ?? "unknown");
@@ -236,23 +272,13 @@ export async function fetchMetaData(
       bump(acc, "age_gender", `${age} ${gender}`, r, true);
     }
     demographics.push(...acc.values());
-  } catch {
-    // Breakdown unavailable for this ad — the rest of the pull still stands.
   }
 
-  try {
-    const regionRows = await graphAll(`${adId}/insights`, {
-      fields: "spend,impressions,reach,clicks",
-      breakdowns: "region",
-      time_increment: "1",
-      limit: "500",
-      ...demoWindow,
-    });
+  {
     const acc = new Map<string, MetaDemographic>();
-    for (const r of regionRows) bump(acc, "region", String(r.region ?? "unknown"), r, false);
+    for (const r of regionRows)
+      bump(acc, "region", String(r.region ?? "unknown"), r, false);
     demographics.push(...acc.values());
-  } catch {
-    // ignore — region is the least critical breakdown
   }
 
   const campaignStart = daily.length ? daily[0].asOfDate : ymd(new Date());

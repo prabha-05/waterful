@@ -16,17 +16,19 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [user, settings] = await Promise.all([getCurrentUser(), getSettings()]);
+  // All four together. Gating the badge counts on permissions would save a
+  // Viewer two cheap counts but cost EVERY other page load a second sequential
+  // round trip to Supabase, which is the more expensive trade — this layout
+  // runs on every navigation.
+  const [user, settings, awaitingCount, scriptCount] = await Promise.all([
+    getCurrentUser(),
+    getSettings(),
+    getAwaitingCount(),
+    getScriptsInReviewCount(),
+  ]);
 
   if (!user) redirect("/login");
   if (!user.hasValidRole) redirect("/no-access");
-
-  // Nav badges. Only queried when the person can act on them, so a Viewer's
-  // page load doesn't pay for counts they will never see.
-  const [awaitingCount, scriptCount] = await Promise.all([
-    user.permissions.upload || user.permissions.link ? getAwaitingCount() : Promise.resolve(0),
-    user.permissions.script ? getScriptsInReviewCount() : Promise.resolve(0),
-  ]);
 
   return (
     <SettingsProvider

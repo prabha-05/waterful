@@ -9,16 +9,17 @@ import { ApprovedScripts } from "@/components/library/approved-scripts";
 import { getApprovedScripts } from "@/lib/data/scripts";
 
 export default async function LibraryPage() {
-  const [user, baseCreatives, taxonomy] = await Promise.all([
+  // One round trip, not two: fetching the script queue after the others cost a
+  // second sequential hop to Supabase on every Library load. The permission
+  // check now filters what is DISPLAYED, not what is fetched.
+  const [user, baseCreatives, taxonomy, allApproved] = await Promise.all([
     getCurrentUser(),
     listCreatives(),
     getTaxonomy(),
+    getApprovedScripts(),
   ]);
   const perms = user!.permissions;
-
-  // Approved scripts with no creative yet — shown only to whoever can act on
-  // them, so a Viewer or the Performance team don't see a queue that isn't theirs.
-  const approvedScripts = perms.upload || perms.script ? await getApprovedScripts() : [];
+  const approvedScripts = perms.upload || perms.script ? allApproved : [];
 
   // Resolve signed thumbnail URLs for the cards (private bucket). Cards with a
   // poster only need that small JPEG; the rest also get the source file signed
