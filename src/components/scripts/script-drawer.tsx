@@ -454,15 +454,19 @@ export function ScriptDrawer({
               <span className="text-[11px] text-muted">
                 {!perms.script
                   ? "Editing and submitting require Write scripts."
-                  : !canDelete
-                    ? // Say why Delete is absent. Silence here is what made
-                      // people hunt for a button that was deliberately hidden.
-                      `Approved scripts can't be deleted — request changes first.${
-                        def.next ? ` Next: ${STAGE[def.next].label}.` : ""
-                      }`
-                    : def.next
-                      ? `Next: ${STAGE[def.next].label}`
-                      : "End of the pipeline"}
+                  : stage === "approved"
+                    ? // The Script Library is done with it; Content picks it up.
+                      "Approved and locked — it's on the Creative Library for Content to shoot."
+                    : stage === "received"
+                      ? "Creative received — this script is closed."
+                      : !canDelete
+                        ? // Say why Delete is absent rather than just hiding it.
+                          `Approved scripts can't be edited or deleted — request changes first.${
+                            def.next ? ` Next: ${STAGE[def.next].label}.` : ""
+                          }`
+                        : def.next
+                          ? `Next: ${STAGE[def.next].label}`
+                          : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {canDelete &&

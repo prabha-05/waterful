@@ -57,10 +57,13 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     dot: "bg-red",
   },
   approved: {
+    // The end of the Script Library's job. An approved script is locked — not
+    // editable, not deletable — and appears on the Creative Library for Content
+    // to shoot. It moves again only when a creative is uploaded against it.
     label: "Approved",
-    action: "Submit to content",
-    next: "creators",
-    gate: "script",
+    action: "",
+    next: null,
+    gate: null,
     tone: "text-green bg-green-bg",
     dot: "bg-green",
   },
@@ -88,7 +91,6 @@ export const STAGE_TILES: ScriptStage[] = [
   "review",
   "changes",
   "approved",
-  "creators",
   "received",
 ];
 
@@ -113,6 +115,10 @@ export function nextStage(stage: ScriptStage): ScriptStage | null {
 export const DELETABLE_STAGES: ScriptStage[] = ["draft", "changes", "review"];
 export const isDeletable = (s: ScriptStage) => DELETABLE_STAGES.includes(s);
 
-/** Stages where the wording is still open. Past that it is out being shot. */
-export const EDITABLE_STAGES: ScriptStage[] = ["draft", "changes", "review", "approved"];
+/**
+ * Stages where the wording is still open. Approval closes it: from that moment
+ * Content is working from what they can see, and an edit behind their back
+ * would mean shooting one version while the library shows another.
+ */
+export const EDITABLE_STAGES: ScriptStage[] = ["draft", "changes", "review"];
 export const isEditable = (s: ScriptStage) => EDITABLE_STAGES.includes(s);
