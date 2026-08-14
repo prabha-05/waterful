@@ -85,14 +85,14 @@ export const STAGE: Record<ScriptStage, StageDef> = {
   },
 };
 
-/** Tile order on screen — the pipeline as a person reads it. */
-export const STAGE_TILES: ScriptStage[] = [
-  "draft",
-  "review",
-  "changes",
-  "approved",
-  "received",
-];
+/**
+ * Tiles are a filter, not a diagram of the pipeline. Only the three states
+ * anyone actually filters by: what is being written, and what is ready to
+ * shoot. In review, Changes and Creative received still exist and still show
+ * on each row's pill — they are reachable through All, and an approver is
+ * taken to the review queue by the banner rather than by hunting for a tile.
+ */
+export const STAGE_TILES: ScriptStage[] = ["draft", "approved"];
 
 export const STAGE_LABEL = Object.fromEntries(
   Object.entries(STAGE).map(([k, v]) => [k, v.label]),
