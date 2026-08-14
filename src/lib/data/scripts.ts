@@ -236,23 +236,6 @@ export async function getApprovedScripts(): Promise<ApprovedScript[]> {
   });
 }
 
-/**
- * People a script can be handed to. Filtered to those who can actually upload
- * the creative — the Content team, plus Admins — rather than every user with a
- * role. Assigning a script to someone who can't deliver it is a dead end.
- */
-export async function getContentPeople(): Promise<{ id: string; name: string; role: string }[]> {
-  const rows = await sqlClient`
-    select u.id, u.name, r.label as role
-    from users u
-    join roles r on r.id = u.role_id
-    where u.archived_at is null
-      and r.archived_at is null
-      and r.perm_upload = true
-    order by r.perm_access, u.name`;
-  return rows.map((r) => ({ id: String(r.id), name: String(r.name), role: String(r.role) }));
-}
-
 /** Badge count in the sidebar — scripts sitting in review, waiting on someone. */
 export async function getScriptsInReviewCount(): Promise<number> {
   const [r] = await sqlClient`select count(*)::int as n from scripts where stage = 'review'`;

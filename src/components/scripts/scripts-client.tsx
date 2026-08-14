@@ -11,16 +11,14 @@ import { Button, Chip, Field, Input, Modal, Select } from "@/components/ui/primi
 import { useDate } from "@/components/providers/settings-provider";
 import { ScriptDrawer } from "./script-drawer";
 
-const GRID = "grid-cols-[minmax(200px,2fr)_140px_130px_130px_100px]";
+const GRID = "grid-cols-[minmax(220px,2fr)_150px_150px_110px]";
 
 export function ScriptsClient({
   data,
-  creators,
   taxonomy,
   perms,
 }: {
   data: ScriptLibrary;
-  creators: { id: string; name: string; role: string }[];
   taxonomy: Taxonomy;
   perms: Permissions;
 }) {
@@ -177,7 +175,6 @@ export function ScriptsClient({
               <span>Script</span>
               <span>Stage</span>
               <span>Writer</span>
-              <span>Creator</span>
               <span className="text-right">Updated</span>
             </div>
 
@@ -208,7 +205,6 @@ export function ScriptsClient({
                   </span>
                 </span>
                 <span className="truncate text-ink-2">{s.writer}</span>
-                <span className="truncate text-ink-3">{s.creator ?? "—"}</span>
                 <span className="text-right font-mono text-[13px] text-ink-3">
                   {fmtDate(s.updatedAt)}
                 </span>
@@ -221,7 +217,6 @@ export function ScriptsClient({
       {openId && (
         <ScriptDrawer
           id={openId}
-          creators={creators}
           taxonomy={taxonomy}
           perms={perms}
           onClose={() => setOpenId(null)}

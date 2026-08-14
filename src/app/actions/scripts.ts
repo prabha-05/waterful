@@ -99,7 +99,6 @@ export async function updateScript(
     awarenessId?: string | null;
     hookId?: string | null;
     personaIds?: string[];
-    creatorId?: string | null;
   },
 ): Promise<ScriptResult> {
   let user;
@@ -140,7 +139,6 @@ export async function updateScript(
       awarenessId:
         input.awarenessId === undefined ? current.awarenessId : input.awarenessId || null,
       hookId: input.hookId === undefined ? current.hookId : input.hookId || null,
-      creatorId: input.creatorId === undefined ? current.creatorId : input.creatorId || null,
       // A rewrite after rejection is a new version — that is what "v3" means.
       version: bodyChanged && current.stage === "changes" ? current.version + 1 : current.version,
       updatedAt: new Date(),
@@ -163,7 +161,7 @@ export async function updateScript(
 }
 
 /** draft|changes → review → approved → creators → received. */
-export async function advanceScript(id: string, creatorId?: string): Promise<ScriptResult> {
+export async function advanceScript(id: string): Promise<ScriptResult> {
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
 
@@ -188,19 +186,11 @@ export async function advanceScript(id: string, creatorId?: string): Promise<Scr
           : `Not authorized — missing "${def.gate}" permission.`,
     };
   }
-  // The content person is chosen before review, not after approval: the
-  // approver should see who it is for, and an approved script is then
-  // immediately actionable without a second decision.
-  const creator = creatorId || current.creatorId;
-  if (def.needsCreator && !creator) {
-    return { ok: false, error: "Choose the content person who will shoot this first." };
-  }
 
   await db
     .update(scripts)
     .set({
       stage: to,
-      creatorId: creator ?? null,
       updatedAt: new Date(),
     })
     .where(eq(scripts.id, id));

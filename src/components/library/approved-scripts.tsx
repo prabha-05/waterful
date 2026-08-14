@@ -55,10 +55,7 @@ export function ApprovedScripts({
                     {s.runtime ? ` · ${s.runtime}s` : ""}
                   </Chip>
                 )}
-                <span className="text-[11px] text-muted">
-                  {s.writer}
-                  {s.creator ? ` → ${s.creator}` : ""}
-                </span>
+                <span className="text-[11px] text-muted">{s.writer}</span>
               </div>
             </div>
 

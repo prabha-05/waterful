@@ -13,14 +13,12 @@ import { useDate } from "@/components/providers/settings-provider";
 
 export function ScriptDrawer({
   id,
-  creators,
   taxonomy,
   perms,
   onClose,
   onChanged,
 }: {
   id: string;
-  creators: { id: string; name: string; role: string }[];
   taxonomy: Taxonomy;
   perms: Permissions;
   onClose: () => void;
@@ -42,7 +40,6 @@ export function ScriptDrawer({
   const [awarenessId, setAwarenessId] = useState("");
   const [hookId, setHookId] = useState("");
   const [personaIds, setPersonaIds] = useState<string[]>([]);
-  const [creatorId, setCreatorId] = useState("");
   const [dirty, setDirty] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfNote, setPdfNote] = useState<string | null>(null);
@@ -61,7 +58,6 @@ export function ScriptDrawer({
       setAwarenessId(s.awarenessId ?? "");
       setHookId(s.hookId ?? "");
       setPersonaIds(s.personaIds);
-      setCreatorId(s.creatorId ?? "");
       setDirty(false);
     }
     setLoading(false);
@@ -93,9 +89,6 @@ export function ScriptDrawer({
   const canEdit = editable && perms.script;
   // The gate is per-stage: approving needs `master`, everything else `script`.
   const canAdvance = def?.gate ? perms[def.gate] : false;
-  // Chosen before review, so the approver can see who is shooting it.
-  const needsCreator = def?.needsCreator === true;
-  const missingCreator = needsCreator && !creatorId;
   // Deletable until an admin approves it. After that the approval is a record;
   // Request changes reverses it first and makes the script deletable again.
   const canDelete = perms.script && stage !== undefined && isDeletable(stage);
@@ -171,7 +164,6 @@ export function ScriptDrawer({
         awarenessId,
         hookId,
         personaIds,
-        creatorId,
       }),
     );
 
@@ -462,33 +454,17 @@ export function ScriptDrawer({
               <span className="text-[11px] text-muted">
                 {!perms.script
                   ? "Editing and submitting require Write scripts."
-                  : missingCreator
-                    ? "Choose a content person above before sending for review."
-                    : !canDelete
-                      ? // Say why Delete is absent. Silence here is what made
-                        // people hunt for a button that was deliberately hidden.
-                        `Approved scripts can't be deleted — request changes first.${
-                          def.next ? ` Next: ${STAGE[def.next].label}.` : ""
-                        }`
-                      : def.next
-                        ? `Next: ${STAGE[def.next].label}`
-                        : "End of the pipeline"}
+                  : !canDelete
+                    ? // Say why Delete is absent. Silence here is what made
+                      // people hunt for a button that was deliberately hidden.
+                      `Approved scripts can't be deleted — request changes first.${
+                        def.next ? ` Next: ${STAGE[def.next].label}.` : ""
+                      }`
+                    : def.next
+                      ? `Next: ${STAGE[def.next].label}`
+                      : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
-                {needsCreator && canAdvance && (
-                  <Select
-                    className="h-9 w-48"
-                    value={creatorId}
-                    onChange={(e) => setCreatorId(e.target.value)}
-                  >
-                    <option value="">Who is shooting this?</option>
-                    {creators.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} · {c.role}
-                      </option>
-                    ))}
-                  </Select>
-                )}
                 {canDelete &&
                   (!confirmDelete ? (
                     <Button
@@ -528,7 +504,7 @@ export function ScriptDrawer({
                 )}
                 {def.next && (
                   <Button
-                    disabled={pending || !canAdvance || missingCreator}
+                    disabled={pending || !canAdvance}
                     title={
                       !canAdvance && def.gate === "master"
                         ? "Only someone who can manage master data may approve a script."
@@ -549,11 +525,10 @@ export function ScriptDrawer({
                             awarenessId,
                             hookId,
                             personaIds,
-                            creatorId,
                           });
                           if (!saved.ok) return saved;
                         }
-                        return advanceScript(id, creatorId || undefined);
+                        return advanceScript(id);
                       })
                     }
                   >

@@ -28,11 +28,6 @@ type StageDef = {
   tone: string;
   /** Dot colour inside the pill. */
   dot: string;
-  /**
-   * Whether this move requires a named content person — only on the way out to
-   * be shot. "With content" means nothing without saying whose hands it is in.
-   */
-  needsCreator?: boolean;
 };
 
 export const STAGE: Record<ScriptStage, StageDef> = {
@@ -66,7 +61,6 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     action: "Submit to content",
     next: "creators",
     gate: "script",
-    needsCreator: true,
     tone: "text-green bg-green-bg",
     dot: "bg-green",
   },

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { ScriptsClient } from "@/components/scripts/scripts-client";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getContentPeople, getScriptLibrary } from "@/lib/data/scripts";
+import { getScriptLibrary } from "@/lib/data/scripts";
 import { getTaxonomy } from "@/lib/data/taxonomy";
 
 /**
@@ -13,11 +13,7 @@ export default async function ScriptsPage() {
   const user = await getCurrentUser();
   if (!user?.permissions.script) redirect("/dashboard");
 
-  const [data, creators, taxonomy] = await Promise.all([
-    getScriptLibrary(),
-    getContentPeople(),
-    getTaxonomy(),
-  ]);
+  const [data, taxonomy] = await Promise.all([getScriptLibrary(), getTaxonomy()]);
 
   return (
     <>
@@ -28,7 +24,6 @@ export default async function ScriptsPage() {
       <div className="flex-1 overflow-auto">
         <ScriptsClient
           data={data}
-          creators={creators}
           taxonomy={taxonomy}
           perms={user.permissions}
         />
