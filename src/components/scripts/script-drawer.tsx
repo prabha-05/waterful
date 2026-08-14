@@ -5,7 +5,7 @@ import { STAGE, isEditable, type ScriptStage } from "@/lib/script-stage";
 import type { ScriptDetail } from "@/lib/data/scripts";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
-import { advanceScript, rejectScript, updateScript } from "@/app/actions/scripts";
+import { advanceScript, deleteScript, rejectScript, updateScript } from "@/app/actions/scripts";
 import { fetchScript } from "@/app/actions/script-read";
 import { extractPdfText } from "@/app/actions/script-pdf";
 import { Button, Drawer, Select, Textarea } from "@/components/ui/primitives";
@@ -46,6 +46,7 @@ export function ScriptDrawer({
   const [dirty, setDirty] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfNote, setPdfNote] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const load = async () => {
     const s = await fetchScript(id);
@@ -95,6 +96,22 @@ export function ScriptDrawer({
   // Chosen before review, so the approver can see who is shooting it.
   const needsCreator = def?.needsCreator === true;
   const missingCreator = needsCreator && !creatorId;
+  // Only before it has been approved: past that a creative may point at it, and
+  // the trail of who approved what is worth more than tidiness.
+  const canDelete = perms.script && (stage === "draft" || stage === "changes");
+
+  const doDelete = () => {
+    setErr(null);
+    start(async () => {
+      const res = await deleteScript(id);
+      if (!res.ok) {
+        setConfirmDelete(false);
+        return setErr(res.error ?? "Delete failed.");
+      }
+      onChanged();
+      onClose();
+    });
+  };
 
   // Personas offered are those mapped to the chosen angle (same rule as upload).
   const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
@@ -476,6 +493,30 @@ export function ScriptDrawer({
                       : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
+                {canDelete &&
+                  (!confirmDelete ? (
+                    <Button
+                      variant="danger"
+                      disabled={pending}
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      Delete
+                    </Button>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-red">Delete permanently?</span>
+                      <Button variant="danger" disabled={pending} onClick={doDelete}>
+                        {pending ? "Deleting…" : "Yes, delete"}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() => setConfirmDelete(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </span>
+                  ))}
                 {perms.script && stage !== "changes" && stage !== "draft" && (
                   <Button
                     variant="danger"
