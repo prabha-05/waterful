@@ -43,7 +43,11 @@ export default async function LibraryPage() {
       <div className="flex-1 overflow-auto">
         {approvedScripts.length > 0 && (
           <div className="px-6 pt-6">
-            <ApprovedScripts scripts={approvedScripts} />
+            <ApprovedScripts
+              scripts={approvedScripts}
+              taxonomy={taxonomy}
+              canUpload={perms.upload}
+            />
           </div>
         )}
         <LibraryClient creatives={creatives} taxonomy={taxonomy} perms={perms} />

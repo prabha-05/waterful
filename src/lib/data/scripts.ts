@@ -182,14 +182,31 @@ export async function getScript(id: string): Promise<ScriptDetail | null> {
   };
 }
 
+/**
+ * What the Creative Library queue needs: enough to READ the script and enough
+ * to seed the upload form from it. Content people have no `script` permission,
+ * so they cannot open the Script Library — the full text has to travel here.
+ */
+export type ApprovedScript = ScriptRow & {
+  body: string;
+  angleId: string | null;
+  typeId: string | null;
+  subtypeId: string | null;
+  awarenessId: string | null;
+  hookId: string | null;
+  personaIds: string[];
+};
+
 /** Approved scripts with no creative yet — the Creative Library's waiting queue. */
-export async function getApprovedScripts(): Promise<ScriptRow[]> {
+export async function getApprovedScripts(): Promise<ApprovedScript[]> {
   const rows = await sqlClient`
     select s.id, s.code, s.title, s.hook_line, s.stage, s.runtime,
-           s.words, s.version, s.updated_at,
+           s.words, s.version, s.updated_at, s.body,
+           s.angle_id, s.type_id, s.subtype_id, s.awareness_id, s.hook_id,
            a.label as angle, t.label as type_label, st.label as subtype_label,
            h.label as hook_label,
            coalesce(string_agg(distinct p.label, '||'), '') as personas,
+           coalesce(string_agg(distinct sp.persona_id::text, '||'), '') as persona_ids,
            w.name as writer, c.name as creator
     from scripts s
     join users w on w.id = s.writer_id
@@ -204,7 +221,19 @@ export async function getApprovedScripts(): Promise<ScriptRow[]> {
       and not exists (select 1 from creatives cr where cr.script_id = s.id)
     group by s.id, a.label, t.label, st.label, h.label, w.name, c.name
     order by s.updated_at desc`;
-  return rows.map((r) => toRow(r as Record<string, unknown>));
+  return rows.map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      ...toRow(row),
+      body: String(row.body ?? ""),
+      angleId: (row.angle_id as string | null) ?? null,
+      typeId: (row.type_id as string | null) ?? null,
+      subtypeId: (row.subtype_id as string | null) ?? null,
+      awarenessId: (row.awareness_id as string | null) ?? null,
+      hookId: (row.hook_id as string | null) ?? null,
+      personaIds: row.persona_ids ? String(row.persona_ids).split("||").filter(Boolean) : [],
+    };
+  });
 }
 
 /**

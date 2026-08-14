@@ -61,13 +61,42 @@ function capturePoster(file: File, maxWidth = 320): Promise<Blob | null> {
   });
 }
 
-export function UploadButton({ taxonomy }: { taxonomy: Taxonomy }) {
+/**
+ * A script this creative is being uploaded against. Its tagging seeds the form
+ * — "the creative inherits all of it" — and the id closes the loop, flipping
+ * the script to Creative received on save.
+ */
+export type UploadFromScript = {
+  id: string;
+  code: string;
+  title: string;
+  angleId: string | null;
+  typeId: string | null;
+  subtypeId: string | null;
+  awarenessId: string | null;
+  hookId: string | null;
+  personaIds: string[];
+};
+
+export function UploadButton({
+  taxonomy,
+  script,
+  label = "Upload Creative",
+  variant = "primary",
+}: {
+  taxonomy: Taxonomy;
+  script?: UploadFromScript;
+  label?: string;
+  variant?: "primary" | "secondary";
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)}>Upload Creative</Button>
+      <Button variant={variant} onClick={() => setOpen(true)}>
+        {label}
+      </Button>
       {open && (
-        <UploadModal taxonomy={taxonomy} onClose={() => setOpen(false)} />
+        <UploadModal taxonomy={taxonomy} script={script} onClose={() => setOpen(false)} />
       )}
     </>
   );
@@ -75,22 +104,26 @@ export function UploadButton({ taxonomy }: { taxonomy: Taxonomy }) {
 
 function UploadModal({
   taxonomy,
+  script,
   onClose,
 }: {
   taxonomy: Taxonomy;
+  script?: UploadFromScript;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [typeId, setTypeId] = useState("");
-  const [subtypeId, setSubtypeId] = useState("");
-  const [angleId, setAngleId] = useState("");
-  const [personaIds, setPersonaIds] = useState<string[]>([]);
-  const [awarenessId, setAwarenessId] = useState("");
-  const [hookId, setHookId] = useState("");
-  const [title, setTitle] = useState("");
+  // Seeded from the script when there is one — the classification was already
+  // decided when it was written, so nobody re-picks it from memory.
+  const [typeId, setTypeId] = useState(script?.typeId ?? "");
+  const [subtypeId, setSubtypeId] = useState(script?.subtypeId ?? "");
+  const [angleId, setAngleId] = useState(script?.angleId ?? "");
+  const [personaIds, setPersonaIds] = useState<string[]>(script?.personaIds ?? []);
+  const [awarenessId, setAwarenessId] = useState(script?.awarenessId ?? "");
+  const [hookId, setHookId] = useState(script?.hookId ?? "");
+  const [title, setTitle] = useState(script?.title ?? "");
   const [reviewLink, setReviewLink] = useState("");
   const [reviewSummary, setReviewSummary] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -168,6 +201,7 @@ function UploadModal({
         reviewSummary,
         personaIds,
         files: uploaded,
+        scriptId: script?.id ?? null,
       });
       if (!res.ok) {
         setError(res.error ?? "Save failed.");
