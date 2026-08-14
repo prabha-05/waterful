@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { STAGE, isEditable, type ScriptStage } from "@/lib/script-stage";
+import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-stage";
 import type { ScriptDetail } from "@/lib/data/scripts";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
@@ -96,10 +96,9 @@ export function ScriptDrawer({
   // Chosen before review, so the approver can see who is shooting it.
   const needsCreator = def?.needsCreator === true;
   const missingCreator = needsCreator && !creatorId;
-  // A writer may bin their own early work; anything already approved needs
-  // `master`, since deleting it discards the record of who approved what.
-  const early = stage === "draft" || stage === "changes";
-  const canDelete = perms.script && (early || perms.master);
+  // Deletable until an admin approves it. After that the approval is a record;
+  // Request changes reverses it first and makes the script deletable again.
+  const canDelete = perms.script && stage !== undefined && isDeletable(stage);
 
   const doDelete = () => {
     setErr(null);

@@ -112,6 +112,15 @@ export function nextStage(stage: ScriptStage): ScriptStage | null {
   return STAGE[stage].next;
 }
 
+/**
+ * Stages a script can still be deleted in — everything BEFORE an admin has
+ * approved it. Once approved it is a record of a decision, and the way to undo
+ * that is Request changes, which reverses the approval deliberately and makes
+ * the script deletable again.
+ */
+export const DELETABLE_STAGES: ScriptStage[] = ["draft", "changes", "review"];
+export const isDeletable = (s: ScriptStage) => DELETABLE_STAGES.includes(s);
+
 /** Stages where the wording is still open. Past that it is out being shot. */
 export const EDITABLE_STAGES: ScriptStage[] = ["draft", "changes", "review", "approved"];
 export const isEditable = (s: ScriptStage) => EDITABLE_STAGES.includes(s);

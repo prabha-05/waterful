@@ -5,7 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { scriptActivity, scriptPersonas, scripts } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
-import { STAGE, isEditable, type ScriptStage } from "@/lib/script-stage";
+import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-stage";
 
 export type ScriptResult = { ok: boolean; error?: string; id?: string };
 
@@ -242,32 +242,30 @@ export async function rejectScript(id: string, reason?: string): Promise<ScriptR
 }
 
 /**
- * Remove a script that shouldn't exist.
+ * Remove a script that shouldn't exist — available up to the point an admin
+ * approves it, and to anyone who can write scripts.
  *
- * A writer may delete their own early work — a draft, or something sent back
- * for changes. Past that point a script has been approved and possibly shot, so
- * deleting it throws away the record of who approved what: that needs `master`,
- * the same permission that approves in the first place.
+ * After approval a script is the record of a decision, so nobody deletes it
+ * outright. Request changes reverses the approval first, deliberately, and the
+ * script becomes deletable again — the undo is a stated act, not a side door.
  *
- * A creative uploaded against a deleted script is NOT deleted — the FK is
+ * A creative uploaded against a deleted script is NOT deleted: the FK is
  * ON DELETE SET NULL, so it survives with the link cleared.
  */
 export async function deleteScript(id: string): Promise<ScriptResult> {
-  let user;
   try {
-    user = await requirePermission("script");
+    await requirePermission("script");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
 
-  const early = current.stage === "draft" || current.stage === "changes";
-  if (!early && !user.permissions.master) {
+  if (!isDeletable(current.stage as ScriptStage)) {
     return {
       ok: false,
       error:
-        "This script has already been approved — only someone who can approve scripts may delete it.",
+        "This script has been approved and can't be deleted. Request changes first if it really has to go.",
     };
   }
   await db.delete(scripts).where(eq(scripts.id, id));
