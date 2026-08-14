@@ -11,7 +11,7 @@ import { Button, Chip, Field, Input, Modal, Select } from "@/components/ui/primi
 import { useDate } from "@/components/providers/settings-provider";
 import { ScriptDrawer } from "./script-drawer";
 
-const GRID = "grid-cols-[minmax(200px,2fr)_140px_130px_130px_56px_88px]";
+const GRID = "grid-cols-[minmax(200px,2fr)_140px_130px_130px_100px]";
 
 export function ScriptsClient({
   data,
@@ -178,7 +178,6 @@ export function ScriptsClient({
               <span>Stage</span>
               <span>Writer</span>
               <span>Creator</span>
-              <span className="text-right">Ver</span>
               <span className="text-right">Updated</span>
             </div>
 
@@ -210,7 +209,6 @@ export function ScriptsClient({
                 </span>
                 <span className="truncate text-ink-2">{s.writer}</span>
                 <span className="truncate text-ink-3">{s.creator ?? "—"}</span>
-                <span className="text-right font-mono text-ink-3">v{s.version}</span>
                 <span className="text-right font-mono text-[13px] text-ink-3">
                   {fmtDate(s.updatedAt)}
                 </span>
