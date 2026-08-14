@@ -27,6 +27,7 @@ export function ScriptDrawer({
   const fmtDate = useDate();
   const [script, setScript] = useState<ScriptDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -45,8 +46,25 @@ export function ScriptDrawer({
   const [pdfNote, setPdfNote] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Always clears `loading`, whatever happens. The previous version awaited
+  // first and cleared after, so a rejected promise left the drawer on
+  // "Loading…" with no way out and nothing explaining why.
   const load = async () => {
-    const s = await fetchScript(id);
+    setLoadErr(null);
+    let res;
+    try {
+      res = await fetchScript(id);
+    } catch (e) {
+      setLoading(false);
+      setLoadErr((e as Error).message || "Couldn't reach the server.");
+      return;
+    }
+    if (!res.ok) {
+      setLoading(false);
+      setLoadErr(res.error);
+      return;
+    }
+    const s = res.script;
     setScript(s);
     if (s) {
       setTitle(s.title);
@@ -169,8 +187,30 @@ export function ScriptDrawer({
 
   return (
     <Drawer open onClose={onClose} width={720}>
-      {loading || !script || !def ? (
-        <div className="p-6 text-sm text-muted">{loading ? "Loading…" : "Script not found."}</div>
+      {loading || loadErr || !script || !def ? (
+        <div className="flex flex-col gap-3 p-6">
+          {loading ? (
+            <p className="text-sm text-muted">Loading…</p>
+          ) : (
+            <>
+              <p className="text-sm text-red">{loadErr ?? "Script not found."}</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setLoading(true);
+                    void load();
+                  }}
+                >
+                  Try again
+                </Button>
+                <Button variant="ghost" onClick={onClose}>
+                  Close
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       ) : (
         <>
           {/* ---- header ------------------------------------------------- */}

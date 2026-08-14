@@ -219,7 +219,13 @@ export function ScriptsClient({
           id={openId}
           taxonomy={taxonomy}
           perms={perms}
-          onClose={() => setOpenId(null)}
+          // Refresh the list on the way out rather than while the drawer is
+          // still fetching — two server round trips at once on a small instance
+          // is what made opening a script feel slow.
+          onClose={() => {
+            setOpenId(null);
+            router.refresh();
+          }}
           onChanged={() => router.refresh()}
         />
       )}
@@ -229,8 +235,9 @@ export function ScriptsClient({
         angles={taxonomy.angles.map((a) => ({ id: a.id, label: a.label }))}
         onClose={() => setCreating(false)}
         onCreated={(id) => {
+          // Straight into the new script. The list catches up when the drawer
+          // closes; refreshing here only competes with the drawer's own fetch.
           setCreating(false);
-          router.refresh();
           setOpenId(id);
         }}
       />
