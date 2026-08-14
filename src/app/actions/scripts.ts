@@ -201,7 +201,12 @@ export async function advanceScript(id: string): Promise<ScriptResult> {
   return { ok: true };
 }
 
-/** Send it back for a rewrite. Always lands on Changes, from wherever it was. */
+/**
+ * Send it back for a rewrite — the other half of the review decision, so it is
+ * only available while a script is IN REVIEW. Once approved a script is final:
+ * Content is shooting from it, and reopening it behind them is exactly what
+ * approval is supposed to prevent.
+ */
 export async function rejectScript(id: string, reason?: string): Promise<ScriptResult> {
   let user;
   try {
@@ -212,7 +217,15 @@ export async function rejectScript(id: string, reason?: string): Promise<ScriptR
 
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
-  if (current.stage === "changes") return { ok: false, error: "Already awaiting changes." };
+  if (current.stage !== "review") {
+    return {
+      ok: false,
+      error:
+        current.stage === "changes"
+          ? "Already awaiting changes."
+          : "Changes can only be requested while a script is in review.",
+    };
+  }
 
   await db
     .update(scripts)

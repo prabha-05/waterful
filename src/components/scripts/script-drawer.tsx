@@ -455,18 +455,13 @@ export function ScriptDrawer({
                 {!perms.script
                   ? "Editing and submitting require Write scripts."
                   : stage === "approved"
-                    ? // The Script Library is done with it; Content picks it up.
+                    ? // Approval is final. The Script Library is done with it.
                       "Approved and locked — it's on the Creative Library for Content to shoot."
                     : stage === "received"
                       ? "Creative received — this script is closed."
-                      : !canDelete
-                        ? // Say why Delete is absent rather than just hiding it.
-                          `Approved scripts can't be edited or deleted — request changes first.${
-                            def.next ? ` Next: ${STAGE[def.next].label}.` : ""
-                          }`
-                        : def.next
-                          ? `Next: ${STAGE[def.next].label}`
-                          : "End of the pipeline"}
+                      : def.next
+                        ? `Next: ${STAGE[def.next].label}`
+                        : "Nothing left to do here."}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {canDelete &&
@@ -497,7 +492,7 @@ export function ScriptDrawer({
                       </Button>
                     </span>
                   ))}
-                {perms.script && stage !== "changes" && stage !== "draft" && (
+                {perms.script && stage === "review" && (
                   <Button
                     variant="danger"
                     disabled={pending}
