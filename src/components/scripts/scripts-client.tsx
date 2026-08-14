@@ -7,7 +7,7 @@ import type { ScriptLibrary } from "@/lib/data/scripts";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
 import { createScript } from "@/app/actions/scripts";
-import { Button, Chip, Field, Input, Modal, Select } from "@/components/ui/primitives";
+import { Button, Chip, Select } from "@/components/ui/primitives";
 import { useDate } from "@/components/providers/settings-provider";
 import { ScriptDrawer } from "./script-drawer";
 
@@ -29,7 +29,22 @@ export function ScriptsClient({
   const [angle, setAngle] = useState("");
   const [writer, setWriter] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, startCreate] = useTransition();
+  const [createErr, setCreateErr] = useState<string | null>(null);
+
+  /**
+   * Straight into the editor. Asking for a title and an angle in a modal, then
+   * showing a second form with the same fields plus everything else, was two
+   * forms for one job — the editor is where all of it is decided anyway.
+   */
+  const newScript = () => {
+    setCreateErr(null);
+    startCreate(async () => {
+      const res = await createScript({ title: "Untitled script" });
+      if (!res.ok) return setCreateErr(res.error ?? "Couldn't create the script.");
+      setOpenId(res.id!);
+    });
+  };
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -138,9 +153,17 @@ export function ScriptsClient({
           <span className="text-sm text-muted">
             {rows.length} script{rows.length === 1 ? "" : "s"}
           </span>
-          <Button onClick={() => setCreating(true)}>New script</Button>
+          <Button onClick={newScript} disabled={creating}>
+            {creating ? "Creating…" : "New script"}
+          </Button>
         </span>
       </div>
+
+      {createErr && (
+        <p className="rounded-[var(--radius-control)] bg-red-bg px-3 py-2 text-sm text-red">
+          {createErr}
+        </p>
+      )}
 
       {/* ---- list -------------------------------------------------------- */}
       {rows.length === 0 ? (
@@ -151,7 +174,9 @@ export function ScriptsClient({
               : "No script matches these filters."}
           </div>
           {data.counts.all === 0 ? (
-            <Button onClick={() => setCreating(true)}>New script</Button>
+            <Button onClick={newScript} disabled={creating}>
+              {creating ? "Creating…" : "New script"}
+            </Button>
           ) : (
             <button
               onClick={() => {
@@ -230,17 +255,6 @@ export function ScriptsClient({
         />
       )}
 
-      <NewScriptModal
-        open={creating}
-        angles={taxonomy.angles.map((a) => ({ id: a.id, label: a.label }))}
-        onClose={() => setCreating(false)}
-        onCreated={(id) => {
-          // Straight into the new script. The list catches up when the drawer
-          // closes; refreshing here only competes with the drawer's own fetch.
-          setCreating(false);
-          setOpenId(id);
-        }}
-      />
     </div>
   );
 }
@@ -275,89 +289,5 @@ function StageTile({
         {count}
       </div>
     </button>
-  );
-}
-
-function NewScriptModal({
-  open,
-  angles,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  angles: { id: string; label: string }[];
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [hook, setHook] = useState("");
-  const [angleId, setAngleId] = useState("");
-  const [type, setType] = useState("Video");
-  const [err, setErr] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  const submit = () => {
-    setErr(null);
-    start(async () => {
-      const res = await createScript({ title, hookLine: hook, angleId });
-      if (!res.ok) return setErr(res.error ?? "Couldn't create the script.");
-      setTitle("");
-      setHook("");
-      setAngleId("");
-      onCreated(res.id!);
-    });
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} className="max-w-md">
-      <div className="flex items-center justify-between border-b border-line px-5 py-4">
-        <b className="text-base font-bold text-ink">New script</b>
-        <button onClick={onClose} className="text-muted hover:text-ink">
-          ✕
-        </button>
-      </div>
-      <div className="flex flex-col gap-4 px-5 py-4">
-        <Field label="Title" required>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="I stopped fading at rep 8"
-          />
-        </Field>
-        <Field label="Hook line">
-          <Input
-            value={hook}
-            onChange={(e) => setHook(e.target.value)}
-            placeholder="The first line the viewer hears"
-          />
-        </Field>
-        <Field label="Angle">
-          <Select value={angleId} onChange={(e) => setAngleId(e.target.value)}>
-            <option value="">Not decided yet</option>
-            {angles.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Intended format">
-          <Select value={type} onChange={(e) => setType(e.target.value)}>
-            <option>Video</option>
-            <option>Static</option>
-            <option>Carousel</option>
-          </Select>
-        </Field>
-        {err && <p className="text-sm text-red">{err}</p>}
-      </div>
-      <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={submit} disabled={pending || !title.trim()}>
-          {pending ? "Creating…" : "Create draft"}
-        </Button>
-      </div>
-    </Modal>
   );
 }
