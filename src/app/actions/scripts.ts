@@ -241,17 +241,34 @@ export async function rejectScript(id: string, reason?: string): Promise<ScriptR
   return { ok: true };
 }
 
+/**
+ * Remove a script that shouldn't exist.
+ *
+ * A writer may delete their own early work — a draft, or something sent back
+ * for changes. Past that point a script has been approved and possibly shot, so
+ * deleting it throws away the record of who approved what: that needs `master`,
+ * the same permission that approves in the first place.
+ *
+ * A creative uploaded against a deleted script is NOT deleted — the FK is
+ * ON DELETE SET NULL, so it survives with the link cleared.
+ */
 export async function deleteScript(id: string): Promise<ScriptResult> {
+  let user;
   try {
-    await requirePermission("script");
+    user = await requirePermission("script");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
-  // Anything past approval may already have a creative pointing at it.
-  if (current.stage !== "draft" && current.stage !== "changes") {
-    return { ok: false, error: "Only a draft or a script awaiting changes can be deleted." };
+
+  const early = current.stage === "draft" || current.stage === "changes";
+  if (!early && !user.permissions.master) {
+    return {
+      ok: false,
+      error:
+        "This script has already been approved — only someone who can approve scripts may delete it.",
+    };
   }
   await db.delete(scripts).where(eq(scripts.id, id));
   revalidatePath("/scripts");

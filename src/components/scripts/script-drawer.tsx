@@ -96,9 +96,10 @@ export function ScriptDrawer({
   // Chosen before review, so the approver can see who is shooting it.
   const needsCreator = def?.needsCreator === true;
   const missingCreator = needsCreator && !creatorId;
-  // Only before it has been approved: past that a creative may point at it, and
-  // the trail of who approved what is worth more than tidiness.
-  const canDelete = perms.script && (stage === "draft" || stage === "changes");
+  // A writer may bin their own early work; anything already approved needs
+  // `master`, since deleting it discards the record of who approved what.
+  const early = stage === "draft" || stage === "changes";
+  const canDelete = perms.script && (early || perms.master);
 
   const doDelete = () => {
     setErr(null);
@@ -504,7 +505,11 @@ export function ScriptDrawer({
                     </Button>
                   ) : (
                     <span className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-red">Delete permanently?</span>
+                      <span className="text-xs font-medium text-red">
+                        {script.creative
+                          ? `Delete permanently? “${script.creative.title}” stays, unlinked.`
+                          : "Delete permanently?"}
+                      </span>
                       <Button variant="danger" disabled={pending} onClick={doDelete}>
                         {pending ? "Deleting…" : "Yes, delete"}
                       </Button>
