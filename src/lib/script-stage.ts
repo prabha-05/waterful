@@ -29,9 +29,8 @@ type StageDef = {
   /** Dot colour inside the pill. */
   dot: string;
   /**
-   * Whether this move requires a named content person. The writer picks who is
-   * shooting it BEFORE it goes for review, so the approver sees who it is for
-   * and an approved script is immediately actionable.
+   * Whether this move requires a named content person — only on the way out to
+   * be shot. "With content" means nothing without saying whose hands it is in.
    */
   needsCreator?: boolean;
 };
@@ -42,7 +41,6 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     action: "Send for review",
     next: "review",
     gate: "script",
-    needsCreator: true,
     tone: "text-ink-3 bg-line-2",
     dot: "bg-muted",
   },
@@ -60,7 +58,6 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     action: "Resubmit for review",
     next: "review",
     gate: "script",
-    needsCreator: true,
     tone: "text-red bg-red-bg",
     dot: "bg-red",
   },
@@ -69,6 +66,7 @@ export const STAGE: Record<ScriptStage, StageDef> = {
     action: "Submit to content",
     next: "creators",
     gate: "script",
+    needsCreator: true,
     tone: "text-green bg-green-bg",
     dot: "bg-green",
   },

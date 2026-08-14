@@ -292,30 +292,6 @@ export function ScriptDrawer({
                     )}
                   </div>
 
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-[13px] font-medium text-ink-2">
-                      Content person{" "}
-                      <span className="font-normal text-muted">· who will shoot this</span>
-                    </span>
-                    <Select
-                      value={creatorId}
-                      disabled={!canEdit}
-                      onChange={(e) => touch(setCreatorId)(e.target.value)}
-                    >
-                      <option value="">Not chosen yet</option>
-                      {creators.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} · {c.role}
-                        </option>
-                      ))}
-                    </Select>
-                    {missingCreator && canEdit && (
-                      <span className="text-[11px] text-amber">
-                        Needed before this can go for review.
-                      </span>
-                    )}
-                  </label>
-
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="flex flex-col gap-1.5">
                       <span className="text-[13px] font-medium text-ink-2">Type</span>
@@ -499,6 +475,20 @@ export function ScriptDrawer({
                         : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
+                {needsCreator && canAdvance && (
+                  <Select
+                    className="h-9 w-48"
+                    value={creatorId}
+                    onChange={(e) => setCreatorId(e.target.value)}
+                  >
+                    <option value="">Who is shooting this?</option>
+                    {creators.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} · {c.role}
+                      </option>
+                    ))}
+                  </Select>
+                )}
                 {canDelete &&
                   (!confirmDelete ? (
                     <Button
