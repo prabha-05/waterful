@@ -488,9 +488,15 @@ export function ScriptDrawer({
                   ? "Editing and submitting require Write scripts."
                   : missingCreator
                     ? "Choose a content person above before sending for review."
-                    : def.next
-                      ? `Next: ${STAGE[def.next].label}`
-                      : "End of the pipeline"}
+                    : !canDelete
+                      ? // Say why Delete is absent. Silence here is what made
+                        // people hunt for a button that was deliberately hidden.
+                        `Approved scripts can't be deleted — request changes first.${
+                          def.next ? ` Next: ${STAGE[def.next].label}.` : ""
+                        }`
+                      : def.next
+                        ? `Next: ${STAGE[def.next].label}`
+                        : "End of the pipeline"}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {canDelete &&
