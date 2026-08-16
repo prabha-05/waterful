@@ -206,14 +206,24 @@ export async function advanceScript(id: string): Promise<ScriptResult> {
  * only available while a script is IN REVIEW. Once approved a script is final:
  * Content is shooting from it, and reopening it behind them is exactly what
  * approval is supposed to prevent.
+ *
+ * The reason is required. A script returning to the writer with no explanation
+ * moves the conversation out of the tool, which is the problem the activity
+ * trail exists to solve.
+ *
+ * Gated on `master`, like approving: sending back is the reviewer's other
+ * answer, not something a writer does to their own draft.
  */
-export async function rejectScript(id: string, reason?: string): Promise<ScriptResult> {
+export async function rejectScript(id: string, reason: string): Promise<ScriptResult> {
   let user;
   try {
-    user = await requirePermission("script");
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
+    user = await requirePermission("master");
+  } catch {
+    return { ok: false, error: "Only someone who can approve scripts may send one back." };
   }
+
+  const note = reason?.trim();
+  if (!note) return { ok: false, error: "Say what needs changing — the writer only sees this." };
 
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
@@ -232,14 +242,7 @@ export async function rejectScript(id: string, reason?: string): Promise<ScriptR
     .set({ stage: "changes", updatedAt: new Date() })
     .where(eq(scripts.id, id));
 
-  const note = reason?.trim();
-  await log(
-    id,
-    user.id,
-    note
-      ? `Sent back for changes — ${note}`
-      : `Requested changes from ${STAGE[current.stage as ScriptStage].label}`,
-  );
+  await log(id, user.id, `Sent back for changes — ${note}`);
   revalidatePath("/scripts");
   return { ok: true };
 }

@@ -5,7 +5,7 @@ import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-s
 import type { ScriptDetail } from "@/lib/data/scripts";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
-import { advanceScript, deleteScript, updateScript } from "@/app/actions/scripts";
+import { advanceScript, deleteScript, rejectScript, updateScript } from "@/app/actions/scripts";
 import { fetchScript } from "@/app/actions/script-read";
 import { extractPdfText } from "@/app/actions/script-pdf";
 import { Button, Drawer, Select, Textarea } from "@/components/ui/primitives";
@@ -48,6 +48,8 @@ export function ScriptDrawer({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfNote, setPdfNote] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sendingBack, setSendingBack] = useState(false);
+  const [reason, setReason] = useState("");
 
   // Always clears `loading`, whatever happens. The previous version awaited
   // first and cleared after, so a rejected promise left the drawer on
@@ -117,6 +119,20 @@ export function ScriptDrawer({
    */
   const canDelete =
     perms.script && stage !== undefined && isDeletable(stage) && script?.writerId === userId;
+
+  // Sending back is the reviewer's other answer, and it carries a reason: the
+  // writer sees only what is written here.
+  const canSendBack = perms.master && stage === "review";
+
+  const doSendBack = () =>
+    run(async () => {
+      const res = await rejectScript(id, reason);
+      if (res.ok) {
+        setSendingBack(false);
+        setReason("");
+      }
+      return res;
+    });
 
   const doDelete = () => {
     setErr(null);
@@ -497,6 +513,33 @@ export function ScriptDrawer({
           {/* ---- pipeline actions ------------------------------------- */}
           <div className="border-t border-line bg-surface px-5 py-3">
             {err && <p className="mb-2 text-sm text-red">{err}</p>}
+            {sendingBack ? (
+              <div className="flex flex-col gap-2">
+                <Textarea
+                  autoFocus
+                  rows={3}
+                  value={reason}
+                  placeholder="What needs changing? The writer sees this, and it stays on the script."
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={pending}
+                    onClick={() => {
+                      setSendingBack(false);
+                      setReason("");
+                      setErr(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button variant="danger" disabled={pending || !reason.trim()} onClick={doSendBack}>
+                    {pending ? "Sending…" : "Send back for changes"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] text-muted">
                 {!perms.script
@@ -539,6 +582,11 @@ export function ScriptDrawer({
                       </Button>
                     </span>
                   ))}
+                {canSendBack && (
+                  <Button variant="danger" disabled={pending} onClick={() => setSendingBack(true)}>
+                    Send back
+                  </Button>
+                )}
                 {def.next && (
                   <Button
                     disabled={pending || !canAdvance}
@@ -574,6 +622,7 @@ export function ScriptDrawer({
                 )}
               </div>
             </div>
+            )}
           </div>
         </>
       )}
