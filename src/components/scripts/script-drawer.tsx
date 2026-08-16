@@ -5,7 +5,7 @@ import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-s
 import type { ScriptDetail } from "@/lib/data/scripts";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
-import { advanceScript, deleteScript, rejectScript, updateScript } from "@/app/actions/scripts";
+import { advanceScript, deleteScript, updateScript } from "@/app/actions/scripts";
 import { fetchScript } from "@/app/actions/script-read";
 import { extractPdfText } from "@/app/actions/script-pdf";
 import { Button, Drawer, Select, Textarea } from "@/components/ui/primitives";
@@ -13,12 +13,15 @@ import { useDate } from "@/components/providers/settings-provider";
 
 export function ScriptDrawer({
   id,
+  userId,
   taxonomy,
   perms,
   onClose,
   onChanged,
 }: {
   id: string;
+  /** Who is looking — a script is deletable only by the person who wrote it. */
+  userId: string;
   taxonomy: Taxonomy;
   perms: Permissions;
   onClose: () => void;
@@ -107,9 +110,13 @@ export function ScriptDrawer({
   const canEdit = editable && perms.script;
   // The gate is per-stage: approving needs `master`, everything else `script`.
   const canAdvance = def?.gate ? perms[def.gate] : false;
-  // Deletable until an admin approves it. After that the approval is a record;
-  // Request changes reverses it first and makes the script deletable again.
-  const canDelete = perms.script && stage !== undefined && isDeletable(stage);
+  /**
+   * Only the writer can delete, and only before approval. A reviewer's job is
+   * to approve — binning someone else's work is not part of it, and an admin
+   * seeing Delete on a script they are reviewing invites the wrong reflex.
+   */
+  const canDelete =
+    perms.script && stage !== undefined && isDeletable(stage) && script?.writerId === userId;
 
   const doDelete = () => {
     setErr(null);
@@ -532,15 +539,6 @@ export function ScriptDrawer({
                       </Button>
                     </span>
                   ))}
-                {perms.script && stage === "review" && (
-                  <Button
-                    variant="danger"
-                    disabled={pending}
-                    onClick={() => run(() => rejectScript(id))}
-                  >
-                    Request changes
-                  </Button>
-                )}
                 {def.next && (
                   <Button
                     disabled={pending || !canAdvance}

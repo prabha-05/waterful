@@ -256,13 +256,20 @@ export async function rejectScript(id: string, reason?: string): Promise<ScriptR
  * ON DELETE SET NULL, so it survives with the link cleared.
  */
 export async function deleteScript(id: string): Promise<ScriptResult> {
+  let user;
   try {
-    await requirePermission("script");
+    user = await requirePermission("script");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
   const [current] = await db.select().from(scripts).where(eq(scripts.id, id));
   if (!current) return { ok: false, error: "Script not found." };
+
+  // Your own work only. A reviewer approves; binning someone else's draft is
+  // not part of that, and the UI hiding the button is not a rule on its own.
+  if (current.writerId !== user.id) {
+    return { ok: false, error: "Only the writer can delete this script." };
+  }
 
   if (!isDeletable(current.stage as ScriptStage)) {
     return {

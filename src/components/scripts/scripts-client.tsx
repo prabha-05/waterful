@@ -15,10 +15,12 @@ const GRID = "grid-cols-[minmax(220px,2fr)_150px_150px_110px]";
 
 export function ScriptsClient({
   data,
+  userId,
   taxonomy,
   perms,
 }: {
   data: ScriptLibrary;
+  userId: string;
   taxonomy: Taxonomy;
   perms: Permissions;
 }) {
@@ -242,6 +244,7 @@ export function ScriptsClient({
       {openId && (
         <ScriptDrawer
           id={openId}
+          userId={userId}
           taxonomy={taxonomy}
           perms={perms}
           // Refresh the list on the way out rather than while the drawer is

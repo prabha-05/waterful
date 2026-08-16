@@ -24,6 +24,7 @@ export default async function ScriptsPage() {
       <div className="flex-1 overflow-auto">
         <ScriptsClient
           data={data}
+          userId={user.id}
           taxonomy={taxonomy}
           perms={user.permissions}
         />
