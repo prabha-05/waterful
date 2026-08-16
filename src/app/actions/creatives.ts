@@ -14,7 +14,7 @@ import {
   creatives,
 } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
-import { markScriptReceived } from "@/app/actions/scripts";
+import { getScriptTagging, markScriptReceived } from "@/app/actions/scripts";
 import { fetchMetaData } from "@/lib/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -50,6 +50,31 @@ export async function createCreative(data: {
     user = await requirePermission("upload");
   } catch (e) {
     return { ok: false, error: (e as Error).message };
+  }
+
+  /**
+   * When a creative is uploaded against a script, the script decides its
+   * classification — the writer chose it and an admin approved it. The form
+   * hides those fields, but hiding is not enforcing: a request can still carry
+   * anything, so the values are taken from the script here and whatever the
+   * client sent for them is ignored.
+   *
+   * Where the script left a field blank, the submitted value is allowed
+   * through — otherwise a half-tagged script would be impossible to upload
+   * against at all.
+   */
+  const inherited = data.scriptId ? await getScriptTagging(data.scriptId) : null;
+  if (inherited) {
+    data = {
+      ...data,
+      title: inherited.title || data.title,
+      angleId: inherited.angleId || data.angleId,
+      typeId: inherited.typeId || data.typeId,
+      subtypeId: inherited.subtypeId || data.subtypeId,
+      awarenessId: inherited.awarenessId ?? data.awarenessId,
+      hookId: inherited.hookId ?? data.hookId,
+      personaIds: inherited.personaIds.length ? inherited.personaIds : data.personaIds,
+    };
   }
 
   const title = data.title.trim();

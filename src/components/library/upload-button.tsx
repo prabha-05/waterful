@@ -215,14 +215,62 @@ function UploadModal({
   return (
     <Modal open onClose={onClose} className="max-w-xl">
       <div className="flex items-center justify-between border-b border-line px-5 py-4">
-        <h2 className="text-base font-bold text-ink">Upload Creative</h2>
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-ink">Upload Creative</h2>
+          {script && (
+            <p className="truncate font-mono text-[11px] text-muted">
+              {script.code} · {script.title}
+            </p>
+          )}
+        </div>
         <button onClick={onClose} className="text-muted hover:text-ink">✕</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
         <div className="flex flex-col gap-4">
+          {script && (
+            <div className="rounded-[var(--radius-control)] border border-line bg-surface-2 p-3">
+              <div className="mb-2 text-[13px] font-semibold text-ink-2">
+                Tagging{" "}
+                <span className="font-normal text-muted">
+                  · set on the script · not editable here
+                </span>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+                {[
+                  ["Angle", taxonomy.angles.find((a) => a.id === angleId)?.label],
+                  ["Format", [selectedType?.label, selectedType?.subtypes.find((x) => x.id === subtypeId)?.label].filter(Boolean).join(" · ")],
+                  ["Awareness", taxonomy.awareness.find((a) => a.id === awarenessId)?.label],
+                  ["Hook", taxonomy.hooks.find((h) => h.id === hookId)?.label],
+                ].map(([k, v]) => (
+                  <div key={k as string}>
+                    <dt className="text-[11px] uppercase tracking-wide text-muted">{k}</dt>
+                    <dd className="text-ink-2">{(v as string) || "—"}</dd>
+                  </div>
+                ))}
+                <div className="col-span-2">
+                  <dt className="text-[11px] uppercase tracking-wide text-muted">Personas</dt>
+                  <dd className="mt-1 flex flex-wrap gap-1">
+                    {personaIds.length === 0 ? (
+                      <span className="text-ink-2">—</span>
+                    ) : (
+                      personaIds.map((id) => (
+                        <span
+                          key={id}
+                          className="inline-flex items-center rounded-[var(--radius-pill)] bg-brand-chip px-2.5 py-0.5 text-[11px] font-medium text-brand-deep"
+                        >
+                          {taxonomy.personas.find((p) => p.id === id)?.label ?? id}
+                        </span>
+                      ))
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+
           {/* Format frame — pick first */}
-          <div className="rounded-[var(--radius-control)] border border-line bg-surface-2 p-3">
+          <div className={script ? "hidden" : "rounded-[var(--radius-control)] border border-line bg-surface-2 p-3"}>
             <div className="mb-2 text-[13px] font-semibold text-ink-2">Format</div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Type" required>
@@ -268,6 +316,7 @@ function UploadModal({
             <Textarea value={reviewSummary} onChange={(e) => setReviewSummary(e.target.value)} placeholder="What the review concluded…" />
           </Field>
 
+          <div className={script ? "hidden" : "contents"}>
           <Field label="Title" required>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UGC — morning hydration" />
           </Field>
@@ -321,6 +370,7 @@ function UploadModal({
               {taxonomy.hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
             </Select>
           </Field>
+          </div>
 
           {error && <p className="text-sm text-red">{error}</p>}
         </div>
