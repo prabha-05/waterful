@@ -29,7 +29,12 @@ const client =
     prepare: false, // required for pgBouncer transaction pooler
     fetch_types: false, // skip per-connection pg_catalog type lookups (pooler-friendly)
     max: 8,
-    idle_timeout: 20,
+    // Keep connections warm. At idle_timeout: 20 an internal tool with a handful
+    // of users found a cold pool on nearly every request and paid a fresh TLS +
+    // auth handshake to Mumbai — measured as 393ms for a single indexed lookup
+    // on users.email. 10 minutes spans normal think-time between clicks, and
+    // `max: 8` still caps our share of the pooler.
+    idle_timeout: 600,
     connect_timeout: 10, // fail a stalled connection fast instead of hanging for minutes
   });
 
