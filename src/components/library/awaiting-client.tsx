@@ -47,7 +47,27 @@ export function AwaitingClient({
             {c.thumbUrl ? (
               c.type === "Video" ? (
                 <>
-                  <VideoThumb src={c.thumbUrl!} alt={c.title} className="h-full w-full object-cover" />
+                  {c.hasPoster ? (
+                    // Poster stored server-side — a small JPEG, never a video.
+                    // Feeding it to <VideoThumb> made a <video> try to decode a
+                    // JPEG, which errors out and leaves the tile blank.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={c.thumbUrl}
+                      alt={c.title}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <VideoThumb
+                      src={c.thumbUrl}
+                      alt={c.title}
+                      cacheKey={c.sourcePath ?? undefined}
+                      storagePath={c.sourcePath}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
                   <span className="absolute text-[10px] text-white">▶</span>
                 </>
               ) : (
