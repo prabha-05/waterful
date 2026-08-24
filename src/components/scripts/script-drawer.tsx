@@ -160,7 +160,6 @@ export function ScriptDrawer({
   // Personas offered are those mapped to the chosen angle (same rule as upload).
   const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
   const allowedPersonas = angleId ? taxonomy.personas.filter((p) => allowedIds.has(p.id)) : [];
-  const subtypes = taxonomy.types.find((t) => t.id === typeId)?.subtypes ?? [];
 
   const download = () => {
     if (!script) return;
@@ -210,8 +209,6 @@ export function ScriptDrawer({
         hookLine: hook,
         body,
         angleId,
-        typeId,
-        subtypeId,
         awarenessId,
         hookId,
         tagIds: Object.values(tagsByGroup).flat(),
@@ -358,41 +355,6 @@ export function ScriptDrawer({
                     )}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[13px] font-medium text-ink-2">Type</span>
-                      <Select
-                        value={typeId}
-                        disabled={!canEdit}
-                        onChange={(e) => {
-                          touch(setTypeId)(e.target.value);
-                          setSubtypeId("");
-                        }}
-                      >
-                        <option value="">—</option>
-                        {taxonomy.types.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[13px] font-medium text-ink-2">Sub-type</span>
-                      <Select
-                        value={subtypeId}
-                        disabled={!canEdit || !typeId}
-                        onChange={(e) => touch(setSubtypeId)(e.target.value)}
-                      >
-                        <option value="">—</option>
-                        {subtypes.map((st) => (
-                          <option key={st.id} value={st.id}>
-                            {st.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
-                  </div>
                   <div className="mt-3">
                     <TagGroupFields
                       groups={taxonomy.tagGroups}

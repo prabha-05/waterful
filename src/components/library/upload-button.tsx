@@ -282,7 +282,7 @@ function UploadModal({
           )}
 
           {/* Format frame — pick first */}
-          <div className={script ? "hidden" : "rounded-[var(--radius-control)] border border-line bg-surface-2 p-3"}>
+          <div className={script?.typeId ? "hidden" : "rounded-[var(--radius-control)] border border-line bg-surface-2 p-3"}>
             <div className="mb-2 text-[13px] font-semibold text-ink-2">Format</div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Type" required>
