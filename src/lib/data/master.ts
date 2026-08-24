@@ -4,6 +4,15 @@ import { sqlClient } from "@/lib/db";
 export type LabelRow = { id: string; label: string; archived: boolean; usage: number };
 export type SubtypeRow = LabelRow & { typeId: string };
 export type TypeRow = LabelRow & { subtypes: SubtypeRow[] };
+export type TagRow = LabelRow & { groupId: string };
+export type TagGroupRow = {
+  id: string;
+  key: string;
+  label: string;
+  multi: boolean;
+  archived: boolean;
+  tags: TagRow[];
+};
 export type MappingRow = {
   angleId: string;
   angleLabel: string;
@@ -17,6 +26,7 @@ export type MasterData = {
   awareness: LabelRow[];
   hooks: LabelRow[];
   mapping: MappingRow[];
+  tagGroups: TagGroupRow[];
   personaOptions: { id: string; label: string }[];
 };
 
@@ -50,6 +60,15 @@ export async function getMasterData(): Promise<MasterData> {
     select h.id, h.label, (h.archived_at is not null) as archived,
            (select count(*)::int from creatives c where c.hook_id = h.id) as usage
     from hook_types h order by h.label`) as unknown as LabelRow[];
+
+  const groupRows = (await sqlClient`
+    select g.id, g.key, g.label, g.multi, (g.archived_at is not null) as archived
+    from tag_groups g order by g.position, g.label`) as unknown as Omit<TagGroupRow, "tags">[];
+
+  const tagRows = (await sqlClient`
+    select t.id, t.group_id as "groupId", t.label, (t.archived_at is not null) as archived,
+           (select count(*)::int from creative_tags ct where ct.tag_id = t.id) as usage
+    from tags t order by t.position, t.label`) as unknown as TagRow[];
 
   // Angle↔Persona mapping with per-pair usage (locked when a creative uses that exact pair).
   // Driven FROM angles (left join) so EVERY active angle shows a row + "+ Add persona",
@@ -92,6 +111,7 @@ export async function getMasterData(): Promise<MasterData> {
     awareness,
     hooks,
     mapping,
+    tagGroups: groupRows.map((g) => ({ ...g, tags: tagRows.filter((t) => t.groupId === g.id) })),
     personaOptions: personas.filter((p) => !p.archived).map((p) => ({ id: p.id, label: p.label })),
   };
 }

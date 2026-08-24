@@ -14,7 +14,7 @@ export default async function MasterDataPage() {
     <>
       <PageHeader
         title="Master Data"
-        subtitle="Personas, Angles, Angle ↔ Persona, Types & Sub-types, Dimensions"
+        subtitle="Personas, Angles, Angle ↔ Persona, Types & Sub-types, Dimensions, Tags"
       />
       <div className="flex-1 overflow-auto">
         <MasterClient data={data} />

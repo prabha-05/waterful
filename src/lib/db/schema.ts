@@ -168,6 +168,28 @@ export const hookTypes = pgTable("hook_types", {
   archivedAt: timestamp("archived_at", { withTimezone: true }),
 });
 
+// Tagging framework (2026-08-24). The dimensions above each got their own
+// table; these are generic so a new dimension is a row in tag_groups, not a
+// migration. `multi` = a creative may carry several tags from the group.
+export const tagGroups = pgTable("tag_groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  multi: boolean("multi").notNull().default(false),
+  position: integer("position").notNull().default(0),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+});
+
+export const tags = pgTable("tags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id")
+    .notNull()
+    .references(() => tagGroups.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  position: integer("position").notNull().default(0),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+});
+
 // ---------------------------------------------------------------------------
 // Creatives + files + personas (decisions §7, #5)
 // ---------------------------------------------------------------------------
@@ -200,6 +222,20 @@ export const creatives = pgTable("creatives", {
     .notNull()
     .defaultNow(),
 });
+
+// Applied tags (M:N). Nothing writes here until Upload/Edit is wired.
+export const creativeTags = pgTable(
+  "creative_tags",
+  {
+    creativeId: uuid("creative_id")
+      .notNull()
+      .references(() => creatives.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id),
+  },
+  (t) => [primaryKey({ columns: [t.creativeId, t.tagId] })],
+);
 
 export const creativePersonas = pgTable(
   "creative_personas",
