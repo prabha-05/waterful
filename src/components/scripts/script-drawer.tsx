@@ -157,10 +157,6 @@ export function ScriptDrawer({
     });
   };
 
-  // Personas offered are those mapped to the chosen angle (same rule as upload).
-  const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
-  const allowedPersonas = angleId ? taxonomy.personas.filter((p) => allowedIds.has(p.id)) : [];
-
   const download = () => {
     if (!script) return;
     const text = [
@@ -212,7 +208,6 @@ export function ScriptDrawer({
         awarenessId,
         hookId,
         tagIds: Object.values(tagsByGroup).flat(),
-        personaIds,
       }),
     );
 
@@ -314,46 +309,6 @@ export function ScriptDrawer({
                       ))}
                     </Select>
                   </label>
-
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[13px] font-medium text-ink-2">
-                      Personas{" "}
-                      <span className="font-normal text-muted">
-                        · mapped to the angle · pick one or more
-                      </span>
-                    </span>
-                    {!angleId ? (
-                      <p className="text-sm text-muted">Choose an angle first.</p>
-                    ) : allowedPersonas.length === 0 ? (
-                      <p className="text-sm text-muted">No personas mapped to this angle yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {allowedPersonas.map((p) => {
-                          const on = personaIds.includes(p.id);
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              disabled={!canEdit}
-                              aria-pressed={on}
-                              onClick={() =>
-                                touch(setPersonaIds)(
-                                  on ? personaIds.filter((x) => x !== p.id) : [...personaIds, p.id],
-                                )
-                              }
-                              className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
-                                on
-                                  ? "border-brand bg-brand-chip text-brand-deep"
-                                  : "border-line bg-surface text-ink-3 hover:bg-surface-2"
-                              } disabled:opacity-60`}
-                            >
-                              {p.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
 
                   <div className="mt-3">
                     <TagGroupFields

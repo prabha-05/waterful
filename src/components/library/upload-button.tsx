@@ -329,16 +329,19 @@ function UploadModal({
           </Field>
 
           <div className={script ? "hidden" : "contents"}>
-          <Field label="Title" required>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UGC — morning hydration" />
-          </Field>
+            <Field label="Title" required>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UGC — morning hydration" />
+            </Field>
+          </div>
 
-          <Field label="Angle" required>
-            <Select value={angleId} onChange={(e) => { setAngleId(e.target.value); setPersonaIds([]); }}>
-              <option value="">Select…</option>
-              {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-            </Select>
-          </Field>
+          <div className={script?.angleId ? "hidden" : "contents"}>
+            <Field label="Angle" required>
+              <Select value={angleId} onChange={(e) => { setAngleId(e.target.value); setPersonaIds([]); }}>
+                <option value="">Select…</option>
+                {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </Select>
+            </Field>
+          </div>
 
           <Field label="Persona (mapped to the angle)" required>
             {!angleId ? (
@@ -373,7 +376,6 @@ function UploadModal({
             value={tagsByGroup}
             onChange={setTagsByGroup}
           />
-          </div>
 
           {error && <p className="text-sm text-red">{error}</p>}
         </div>
