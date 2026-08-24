@@ -76,6 +76,8 @@ export type UploadFromScript = {
   awarenessId: string | null;
   hookId: string | null;
   personaIds: string[];
+  /** Dimension tags decided on the script — the creative inherits them. */
+  tagIds?: string[];
 };
 
 export function UploadButton({
@@ -125,7 +127,13 @@ function UploadModal({
   const [hookId, setHookId] = useState(script?.hookId ?? "");
   // The 2026-08-24 dimensions, keyed by group id. Multi-select groups hold
   // several ids; single-select groups hold at most one.
-  const [tagsByGroup, setTagsByGroup] = useState<Record<string, string[]>>({});
+  const [tagsByGroup, setTagsByGroup] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(
+      taxonomy.tagGroups
+        .map((g) => [g.id, g.options.filter((o) => (script?.tagIds ?? []).includes(o.id)).map((o) => o.id)] as const)
+        .filter(([, ids]) => ids.length > 0),
+    ),
+  );
   const [title, setTitle] = useState(script?.title ?? "");
   const [reviewLink, setReviewLink] = useState("");
   const [reviewSummary, setReviewSummary] = useState("");
@@ -325,20 +333,12 @@ function UploadModal({
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. UGC — morning hydration" />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Angle" required>
-              <Select value={angleId} onChange={(e) => { setAngleId(e.target.value); setPersonaIds([]); }}>
-                <option value="">Select…</option>
-                {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-              </Select>
-            </Field>
-            <Field label="Awareness">
-              <Select value={awarenessId} onChange={(e) => setAwarenessId(e.target.value)}>
-                <option value="">—</option>
-                {taxonomy.awareness.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-              </Select>
-            </Field>
-          </div>
+          <Field label="Angle" required>
+            <Select value={angleId} onChange={(e) => { setAngleId(e.target.value); setPersonaIds([]); }}>
+              <option value="">Select…</option>
+              {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </Select>
+          </Field>
 
           <Field label="Persona (mapped to the angle)" required>
             {!angleId ? (
@@ -366,13 +366,6 @@ function UploadModal({
                 })}
               </div>
             )}
-          </Field>
-
-          <Field label="Hook">
-            <Select value={hookId} onChange={(e) => setHookId(e.target.value)}>
-              <option value="">—</option>
-              {taxonomy.hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
-            </Select>
           </Field>
 
           <TagGroupFields

@@ -417,16 +417,6 @@ function EditTagsModal({
               })}
             </div>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Awareness"><Select value={awarenessId} onChange={(e) => setAwarenessId(e.target.value)}>
-              <option value="">—</option>
-              {taxonomy.awareness.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-            </Select></Field>
-            <Field label="Hook"><Select value={hookId} onChange={(e) => setHookId(e.target.value)}>
-              <option value="">—</option>
-              {taxonomy.hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
-            </Select></Field>
-          </div>
           <TagGroupFields groups={taxonomy.tagGroups} value={tagsByGroup} onChange={setTagsByGroup} />
           {error && <p className="text-sm text-red">{error}</p>}
         </div>

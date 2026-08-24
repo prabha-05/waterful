@@ -48,6 +48,8 @@ export type ScriptDetail = ScriptRow & {
   awarenessId: string | null;
   hookId: string | null;
   personaIds: string[];
+  /** Applied dimension tags (Master Data → tag groups). */
+  tagIds: string[];
   writerId: string;
   creatorId: string | null;
   createdAt: string;
@@ -150,8 +152,9 @@ export async function getScript(id: string): Promise<ScriptDetail | null> {
     where s.id = ${id}`;
   if (!s) return null;
 
-  const [personaIdRows, activity, creative] = await Promise.all([
+  const [personaIdRows, tagIdRows, activity, creative] = await Promise.all([
     sqlClient`select persona_id from script_personas where script_id = ${id}`,
+    sqlClient`select tag_id from script_tags where script_id = ${id}`,
     sqlClient`
       select sa.text, sa.at, u.name as actor
       from script_activity sa join users u on u.id = sa.actor_id
@@ -170,6 +173,7 @@ export async function getScript(id: string): Promise<ScriptDetail | null> {
     awarenessId: s.awareness_id,
     hookId: s.hook_id,
     personaIds: personaIdRows.map((r) => String(r.persona_id)),
+    tagIds: tagIdRows.map((r) => String(r.tag_id)),
     writerId: String(s.writer_id),
     creatorId: s.creator_id,
     createdAt: String(s.created_at),

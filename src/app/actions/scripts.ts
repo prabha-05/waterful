@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { scriptActivity, scriptPersonas, scripts } from "@/lib/db/schema";
+import { scriptActivity, scriptPersonas, scriptTags, scripts } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
 import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-stage";
 
@@ -13,6 +13,13 @@ export type ScriptResult = { ok: boolean; error?: string; id?: string };
 const WORDS_PER_MINUTE = 150;
 const countWords = (body: string) => body.trim().split(/\s+/).filter(Boolean).length;
 const runtimeOf = (words: number) => Math.max(1, Math.round((words / WORDS_PER_MINUTE) * 60));
+
+/** Replace a script's dimension tags (Product USP, Content Format, …). */
+async function writeScriptTags(scriptId: string, tagIds: string[]) {
+  const ids = [...new Set(tagIds.filter(Boolean))];
+  await db.delete(scriptTags).where(eq(scriptTags.scriptId, scriptId));
+  if (ids.length) await db.insert(scriptTags).values(ids.map((tagId) => ({ scriptId, tagId })));
+}
 
 async function log(scriptId: string, actorId: string, text: string) {
   await db.insert(scriptActivity).values({ scriptId, actorId, text });
@@ -42,6 +49,7 @@ export async function createScript(input: {
   awarenessId?: string | null;
   hookId?: string | null;
   personaIds?: string[];
+  tagIds?: string[];
 }): Promise<ScriptResult> {
   let user;
   try {
@@ -74,6 +82,7 @@ export async function createScript(input: {
     })
     .returning({ id: scripts.id, code: scripts.code });
 
+  if (input.tagIds) await writeScriptTags(row.id, input.tagIds);
   if (input.personaIds?.length) {
     await db
       .insert(scriptPersonas)
@@ -99,6 +108,7 @@ export async function updateScript(
     awarenessId?: string | null;
     hookId?: string | null;
     personaIds?: string[];
+    tagIds?: string[];
   },
 ): Promise<ScriptResult> {
   let user;
@@ -146,6 +156,7 @@ export async function updateScript(
     .where(eq(scripts.id, id));
 
   // Personas are replaced wholesale, same as the creative editor does.
+  if (input.tagIds) await writeScriptTags(id, input.tagIds);
   if (input.personaIds) {
     await db.delete(scriptPersonas).where(eq(scriptPersonas.scriptId, id));
     if (input.personaIds.length) {
@@ -298,6 +309,7 @@ export async function getScriptTagging(scriptId: string): Promise<{
   awarenessId: string | null;
   hookId: string | null;
   personaIds: string[];
+  tagIds: string[];
   title: string;
 } | null> {
   const [s] = await db.select().from(scripts).where(eq(scripts.id, scriptId));
@@ -306,6 +318,10 @@ export async function getScriptTagging(scriptId: string): Promise<{
     .select({ personaId: scriptPersonas.personaId })
     .from(scriptPersonas)
     .where(eq(scriptPersonas.scriptId, scriptId));
+  const tagRows = await db
+    .select({ tagId: scriptTags.tagId })
+    .from(scriptTags)
+    .where(eq(scriptTags.scriptId, scriptId));
   return {
     angleId: s.angleId,
     typeId: s.typeId,
@@ -313,6 +329,7 @@ export async function getScriptTagging(scriptId: string): Promise<{
     awarenessId: s.awarenessId,
     hookId: s.hookId,
     personaIds: rows.map((r) => r.personaId),
+    tagIds: tagRows.map((r) => r.tagId),
     title: s.title,
   };
 }

@@ -224,6 +224,20 @@ export const creatives = pgTable("creatives", {
 });
 
 // Applied tags (M:N). Nothing writes here until Upload/Edit is wired.
+// Scripts carry the same dimensions, so an upload inherits them.
+export const scriptTags = pgTable(
+  "script_tags",
+  {
+    scriptId: uuid("script_id")
+      .notNull()
+      .references(() => scripts.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id),
+  },
+  (t) => [primaryKey({ columns: [t.scriptId, t.tagId] })],
+);
+
 export const creativeTags = pgTable(
   "creative_tags",
   {

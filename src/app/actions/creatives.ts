@@ -112,6 +112,7 @@ export async function createCreative(data: {
       awarenessId: inherited.awarenessId ?? data.awarenessId,
       hookId: inherited.hookId ?? data.hookId,
       personaIds: inherited.personaIds.length ? inherited.personaIds : data.personaIds,
+      tagIds: inherited.tagIds.length ? inherited.tagIds : data.tagIds,
     };
   }
 

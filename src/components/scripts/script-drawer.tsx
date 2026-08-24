@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-stage";
 import type { ScriptDetail } from "@/lib/data/scripts";
+import { TagGroupFields } from "@/components/library/upload-button";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
 import { advanceScript, deleteScript, rejectScript, updateScript } from "@/app/actions/scripts";
@@ -43,6 +44,8 @@ export function ScriptDrawer({
   const [subtypeId, setSubtypeId] = useState("");
   const [awarenessId, setAwarenessId] = useState("");
   const [hookId, setHookId] = useState("");
+  // The 2026-08-24 dimensions, keyed by group id.
+  const [tagsByGroup, setTagsByGroup] = useState<Record<string, string[]>>({});
   const [personaIds, setPersonaIds] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -80,6 +83,13 @@ export function ScriptDrawer({
       setSubtypeId(s.subtypeId ?? "");
       setAwarenessId(s.awarenessId ?? "");
       setHookId(s.hookId ?? "");
+      setTagsByGroup(
+        Object.fromEntries(
+          taxonomy.tagGroups
+            .map((g) => [g.id, g.options.filter((o) => s.tagIds.includes(o.id)).map((o) => o.id)] as const)
+            .filter(([, ids]) => ids.length > 0),
+        ),
+      );
       setPersonaIds(s.personaIds);
       setDirty(false);
     }
@@ -204,6 +214,7 @@ export function ScriptDrawer({
         subtypeId,
         awarenessId,
         hookId,
+        tagIds: Object.values(tagsByGroup).flat(),
         personaIds,
       }),
     );
@@ -381,36 +392,13 @@ export function ScriptDrawer({
                         ))}
                       </Select>
                     </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[13px] font-medium text-ink-2">Awareness stage</span>
-                      <Select
-                        value={awarenessId}
-                        disabled={!canEdit}
-                        onChange={(e) => touch(setAwarenessId)(e.target.value)}
-                      >
-                        <option value="">—</option>
-                        {taxonomy.awareness.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[13px] font-medium text-ink-2">Hook type</span>
-                      <Select
-                        value={hookId}
-                        disabled={!canEdit}
-                        onChange={(e) => touch(setHookId)(e.target.value)}
-                      >
-                        <option value="">—</option>
-                        {taxonomy.hooks.map((h) => (
-                          <option key={h.id} value={h.id}>
-                            {h.label}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
+                  </div>
+                  <div className="mt-3">
+                    <TagGroupFields
+                      groups={taxonomy.tagGroups}
+                      value={tagsByGroup}
+                      onChange={canEdit ? setTagsByGroup : () => {}}
+                    />
                   </div>
                 </div>
               </section>
@@ -609,6 +597,7 @@ export function ScriptDrawer({
                             subtypeId,
                             awarenessId,
                             hookId,
+                            tagIds: Object.values(tagsByGroup).flat(),
                             personaIds,
                           });
                           if (!saved.ok) return saved;
