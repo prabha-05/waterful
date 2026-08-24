@@ -22,7 +22,8 @@ import {
 import { Button, Chip, Input, Select } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 
-type Tab = "personas" | "angles" | "mapping" | "types" | "dimensions";
+/** Fixed tabs, plus one per tag group (its id) — see `tabs` below. */
+type Tab = string;
 type Run = (fn: () => Promise<{ ok: boolean; error?: string }>) => void;
 
 export function MasterClient({ data }: { data: MasterData }) {
@@ -39,13 +40,18 @@ export function MasterClient({ data }: { data: MasterData }) {
       else router.refresh();
     });
 
+  // The five 2026-08-24 dimensions each get a tab of their own, listing their
+  // values exactly the way Personas lists personas.
   const tabs: { key: Tab; label: string }[] = [
     { key: "personas", label: "Personas" },
     { key: "angles", label: "Angles" },
     { key: "mapping", label: "Angle ↔ Persona" },
     { key: "types", label: "Types & Sub-types" },
+    ...data.tagGroups.map((g) => ({ key: g.id, label: g.label })),
     { key: "dimensions", label: "Dimensions" },
   ];
+
+  const activeGroup = data.tagGroups.find((g) => g.id === tab);
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -67,14 +73,12 @@ export function MasterClient({ data }: { data: MasterData }) {
       {tab === "angles" && <LabelList kind="angle" title="Angle" items={data.angles} run={run} pending={pending} />}
       {tab === "mapping" && <Mapping data={data} run={run} pending={pending} />}
       {tab === "types" && <Types types={data.types} run={run} pending={pending} />}
+      {activeGroup && <TagGroupList group={activeGroup} run={run} pending={pending} />}
       {tab === "dimensions" && (
         <div className="flex flex-col gap-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <LabelList kind="awareness" title="Awareness stage" items={data.awareness} run={run} pending={pending} />
             <LabelList kind="hook" title="Hook type" items={data.hooks} run={run} pending={pending} />
-            {data.tagGroups.map((g) => (
-              <TagGroupList key={g.id} group={g} run={run} pending={pending} />
-            ))}
           </div>
           <AddDimension run={run} pending={pending} />
         </div>
@@ -298,21 +302,20 @@ function TagGroupList({
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-ink">{group.label}</span>
-          {group.multi && <Chip className="bg-surface-2 text-ink-3">Multi-select</Chip>}
+          <span className="text-[11px] text-muted">
+            {group.tags.length} · {group.multi ? "several per creative" : "one per creative"}
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted">{group.tags.length}</span>
-          {inUse === 0 && (
-            <button
-              disabled={pending}
-              onClick={() => run(() => deleteTagGroup(group.id))}
-              className="text-[11px] font-medium text-red hover:underline"
-              title="Remove this dimension entirely"
-            >
-              Remove
-            </button>
-          )}
-        </div>
+        {inUse === 0 && (
+          <button
+            disabled={pending}
+            onClick={() => run(() => deleteTagGroup(group.id))}
+            className="text-[11px] font-medium text-red hover:underline"
+            title="Remove this dimension entirely"
+          >
+            Remove dimension
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-2 border-b border-line p-3">
         <Input
