@@ -4,6 +4,8 @@ import { timed } from "@/lib/perf";
 import { anglePersonas, personas } from "@/lib/db/schema";
 
 export type Option = { id: string; label: string };
+/** A 2026-08-24 dimension plus its selectable values (Master Data → tag groups). */
+export type TagGroupOption = Option & { key: string; multi: boolean; options: Option[] };
 export type TypeWithSubs = Option & { subtypes: Option[] };
 export type Taxonomy = Awaited<ReturnType<typeof loadTaxonomy>>;
 
@@ -52,7 +54,11 @@ async function loadTaxonomy() {
       (select coalesce(json_agg(json_build_object('id', id, 'label', label) order by label), '[]'::json)
          from hook_types where archived_at is null) as hooks,
       (select coalesce(json_agg(json_build_object('angleId', angle_id, 'personaId', persona_id)), '[]'::json)
-         from angle_personas) as angle_personas
+         from angle_personas) as angle_personas,
+      (select coalesce(json_agg(json_build_object('id', id, 'key', key, 'label', label, 'multi', multi) order by position, label), '[]'::json)
+         from tag_groups where archived_at is null) as tag_groups,
+      (select coalesce(json_agg(json_build_object('id', id, 'label', label, 'groupId', group_id) order by position, label), '[]'::json)
+         from tags where archived_at is null) as tag_options
   `;
 
   const angleRows = (row.angles ?? []) as Row[];
@@ -62,6 +68,8 @@ async function loadTaxonomy() {
   const awarenessRows = (row.awareness ?? []) as Row[];
   const hookRows = (row.hooks ?? []) as Row[];
   const mapRows = (row.angle_personas ?? []) as MapRow[];
+  const groupRows = (row.tag_groups ?? []) as { id: string; key: string; label: string; multi: boolean }[];
+  const tagRows = (row.tag_options ?? []) as (Row & { groupId: string })[];
 
   const typesWithSubs: TypeWithSubs[] = typeRows.map((t) => ({
     id: t.id,
@@ -77,12 +85,21 @@ async function loadTaxonomy() {
     (anglePersonaMap[m.angleId] ??= []).push(m.personaId);
   }
 
+  const tagGroups: TagGroupOption[] = groupRows.map((g) => ({
+    id: g.id,
+    key: g.key,
+    label: g.label,
+    multi: g.multi,
+    options: tagRows.filter((t) => t.groupId === g.id).map((t) => ({ id: t.id, label: t.label })),
+  }));
+
   return {
     angles: angleRows.map((a) => ({ id: a.id, label: a.label })),
     personas: personaRows.map((p) => ({ id: p.id, label: p.label })),
     types: typesWithSubs,
     awareness: awarenessRows.map((a) => ({ id: a.id, label: a.label })),
     hooks: hookRows.map((h) => ({ id: h.id, label: h.label })),
+    tagGroups,
     anglePersonaMap,
   };
 }

@@ -10,6 +10,7 @@ import { creativeScore } from "@/lib/score";
 import { formatRoas } from "@/lib/format";
 import { useDate, useFormat } from "@/components/providers/settings-provider";
 import { deleteCreative, editTags, linkAd, setArchived, unlinkAd } from "@/app/actions/creatives";
+import { TagGroupFields } from "./upload-button";
 import {
   Button,
   Chip,
@@ -348,6 +349,15 @@ function EditTagsModal({
   const [title, setTitle] = useState(detail.title);
   const [awarenessId, setAwarenessId] = useState(findId(taxonomy.awareness, detail.awareness));
   const [hookId, setHookId] = useState(findId(taxonomy.hooks, detail.hook));
+  const [tagsByGroup, setTagsByGroup] = useState<Record<string, string[]>>(() => {
+    // Group the creative's existing tag ids back under their dimension.
+    const byGroup: Record<string, string[]> = {};
+    for (const g of taxonomy.tagGroups) {
+      const mine = g.options.filter((o) => detail.tagIds.includes(o.id)).map((o) => o.id);
+      if (mine.length) byGroup[g.id] = mine;
+    }
+    return byGroup;
+  });
   const [personaIds, setPersonaIds] = useState<string[]>(
     taxonomy.personas.filter((p) => detail.personas.includes(p.label)).map((p) => p.id),
   );
@@ -365,6 +375,7 @@ function EditTagsModal({
         awarenessId: awarenessId || null,
         hookId: hookId || null,
         personaIds,
+        tagIds: Object.values(tagsByGroup).flat(),
       });
       if (!res.ok) setError(res.error ?? "Save failed.");
       else onSaved();
@@ -416,6 +427,7 @@ function EditTagsModal({
               {taxonomy.hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
             </Select></Field>
           </div>
+          <TagGroupFields groups={taxonomy.tagGroups} value={tagsByGroup} onChange={setTagsByGroup} />
           {error && <p className="text-sm text-red">{error}</p>}
         </div>
       </div>

@@ -122,6 +122,8 @@ export type CreativeDetail = {
   reviewSummary: string;
   files: { storagePath: string; position: number; url?: string | null }[];
   ads: LinkedAd[];
+  /** Applied dimension tags (Master Data → tag groups), by tag id. */
+  tagIds: string[];
 };
 
 export async function getCreativeDetail(id: string): Promise<CreativeDetail | null> {
@@ -144,6 +146,8 @@ export async function getCreativeDetail(id: string): Promise<CreativeDetail | nu
     where cp.creative_id = ${id} order by p.label`;
   const fileRows = await sqlClient`
     select storage_path, position from creative_files where creative_id = ${id} order by position`;
+  const tagRows = await sqlClient`
+    select tag_id from creative_tags where creative_id = ${id}`;
   const adRows = await sqlClient`
     select aa.meta_ad_id, aa.campaign_id, aa.adset_id, aa.placement, aa.status,
            coalesce(sum(md.spend),0) as spend, coalesce(sum(md.revenue),0) as revenue
@@ -168,6 +172,7 @@ export async function getCreativeDetail(id: string): Promise<CreativeDetail | nu
     reviewLink: c.review_link,
     reviewSummary: c.review_summary,
     files: fileRows.map((f) => ({ storagePath: f.storage_path, position: f.position })),
+    tagIds: tagRows.map((r) => r.tag_id as string),
     ads: adRows.map((r) => {
       const spend = Number(r.spend);
       const revenue = Number(r.revenue);

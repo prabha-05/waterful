@@ -123,6 +123,9 @@ function UploadModal({
   const [personaIds, setPersonaIds] = useState<string[]>(script?.personaIds ?? []);
   const [awarenessId, setAwarenessId] = useState(script?.awarenessId ?? "");
   const [hookId, setHookId] = useState(script?.hookId ?? "");
+  // The 2026-08-24 dimensions, keyed by group id. Multi-select groups hold
+  // several ids; single-select groups hold at most one.
+  const [tagsByGroup, setTagsByGroup] = useState<Record<string, string[]>>({});
   const [title, setTitle] = useState(script?.title ?? "");
   const [reviewLink, setReviewLink] = useState("");
   const [reviewSummary, setReviewSummary] = useState("");
@@ -200,6 +203,7 @@ function UploadModal({
         reviewLink,
         reviewSummary,
         personaIds,
+        tagIds: Object.values(tagsByGroup).flat(),
         files: uploaded,
         scriptId: script?.id ?? null,
       });
@@ -370,6 +374,12 @@ function UploadModal({
               {taxonomy.hooks.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
             </Select>
           </Field>
+
+          <TagGroupFields
+            groups={taxonomy.tagGroups}
+            value={tagsByGroup}
+            onChange={setTagsByGroup}
+          />
           </div>
 
           {error && <p className="text-sm text-red">{error}</p>}
@@ -383,5 +393,68 @@ function UploadModal({
         </Button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * One control per Master Data dimension: a dropdown for single-select groups,
+ * toggle pills for multi-select ones (Product USP stacks). Renders nothing when
+ * no dimensions are defined, so the form is unchanged for anyone who hasn't
+ * added any.
+ */
+export function TagGroupFields({
+  groups,
+  value,
+  onChange,
+}: {
+  groups: Taxonomy["tagGroups"];
+  value: Record<string, string[]>;
+  onChange: (next: Record<string, string[]>) => void;
+}) {
+  const usable = groups.filter((g) => g.options.length > 0);
+  if (usable.length === 0) return null;
+
+  const set = (groupId: string, ids: string[]) => onChange({ ...value, [groupId]: ids });
+
+  return (
+    <>
+      {usable.map((g) =>
+        g.multi ? (
+          <Field key={g.id} label={`${g.label} (pick any)`}>
+            <div className="flex flex-wrap gap-2">
+              {g.options.map((o) => {
+                const on = (value[g.id] ?? []).includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() =>
+                      set(g.id, on
+                        ? (value[g.id] ?? []).filter((x) => x !== o.id)
+                        : [...(value[g.id] ?? []), o.id])
+                    }
+                    className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
+                      on ? "border-brand bg-brand-chip text-brand-deep" : "border-line bg-surface text-ink-3 hover:bg-surface-2"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        ) : (
+          <Field key={g.id} label={g.label}>
+            <Select
+              value={value[g.id]?.[0] ?? ""}
+              onChange={(e) => set(g.id, e.target.value ? [e.target.value] : [])}
+            >
+              <option value="">—</option>
+              {g.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </Select>
+          </Field>
+        ),
+      )}
+    </>
   );
 }

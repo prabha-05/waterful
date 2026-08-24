@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -11,6 +11,9 @@ import {
   adRangeMetrics,
   creativeFiles,
   creativePersonas,
+  creativeTags,
+  tagGroups,
+  tags,
   creatives,
 } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
@@ -31,6 +34,39 @@ function revalidateLoop() {
  * decisions §9) so large UGC video never routes through the app server; this
  * action only persists the resulting storage paths + metadata (small body).
  */
+/**
+ * Applied dimension tags (Product USP, Content Format, …). Single-select groups
+ * accept at most one value; unknown or archived tag ids are rejected rather than
+ * silently dropped, so a stale form can't half-tag a creative.
+ */
+async function writeCreativeTags(creativeId: string, tagIds: string[]): Promise<string | null> {
+  const ids = [...new Set(tagIds.filter(Boolean))];
+  await db.delete(creativeTags).where(eq(creativeTags.creativeId, creativeId));
+  if (ids.length === 0) return null;
+
+  // Parameterised — these ids come straight off the form.
+  const rows = await db
+    .select({ id: tags.id, groupId: tags.groupId, multi: tagGroups.multi, label: tagGroups.label })
+    .from(tags)
+    .innerJoin(tagGroups, eq(tagGroups.id, tags.groupId))
+    .where(and(inArray(tags.id, ids), isNull(tags.archivedAt), isNull(tagGroups.archivedAt)));
+
+  if (rows.length !== ids.length) return "One of the selected tags no longer exists.";
+
+  const perGroup = new Map<string, { n: number; multi: boolean; label: string }>();
+  for (const r of rows) {
+    const cur = perGroup.get(r.groupId) ?? { n: 0, multi: r.multi, label: r.label };
+    cur.n += 1;
+    perGroup.set(r.groupId, cur);
+  }
+  for (const g of perGroup.values()) {
+    if (!g.multi && g.n > 1) return `Pick only one ${g.label}.`;
+  }
+
+  await db.insert(creativeTags).values(ids.map((tagId) => ({ creativeId, tagId })));
+  return null;
+}
+
 export async function createCreative(data: {
   title: string;
   typeId: string;
@@ -41,6 +77,8 @@ export async function createCreative(data: {
   reviewLink: string;
   reviewSummary: string;
   personaIds: string[];
+  /** Values picked for the Master Data dimensions (tag ids). */
+  tagIds?: string[];
   files: { storagePath: string; position: number; posterPath?: string | null }[];
   /** Set when uploading against an approved script — closes the script loop. */
   scriptId?: string | null;
@@ -111,6 +149,9 @@ export async function createCreative(data: {
     })
     .returning({ id: creatives.id });
 
+  const tagErr = await writeCreativeTags(created.id, data.tagIds ?? []);
+  if (tagErr) return { ok: false, error: tagErr };
+
   await db.insert(creativeFiles).values(
     data.files.map((f) => ({
       creativeId: created.id,
@@ -143,6 +184,7 @@ export async function editTags(
     awarenessId: string | null;
     hookId: string | null;
     personaIds: string[];
+    tagIds?: string[];
   },
 ): Promise<ActionResult> {
   try {
@@ -169,6 +211,9 @@ export async function editTags(
   await db
     .insert(creativePersonas)
     .values(data.personaIds.map((personaId) => ({ creativeId, personaId })));
+
+  const tagErr = await writeCreativeTags(creativeId, data.tagIds ?? []);
+  if (tagErr) return { ok: false, error: tagErr };
 
   revalidateLoop();
   revalidatePath(`/library`);
