@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { STAGE, isDeletable, isEditable, type ScriptStage } from "@/lib/script-stage";
 import type { ScriptDetail } from "@/lib/data/scripts";
+import { downloadScriptPdf } from "@/lib/script-pdf";
 import { TagGroupFields } from "@/components/library/upload-button";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
@@ -159,28 +160,7 @@ export function ScriptDrawer({
 
   const download = () => {
     if (!script) return;
-    const text = [
-      script.title,
-      `${script.code} · v${script.version} · ${script.writer}`,
-      [script.angle, script.personas.join(", "), script.format, script.runtime ? `${script.runtime}s` : null]
-        .filter(Boolean)
-        .join(" · "),
-      "",
-      script.hookLine ? `HOOK — ${script.hookLine}` : "",
-      "",
-      script.body,
-      "",
-      script.noteTitle
-        ? `NOTE — ${script.noteTitle}${script.noteTone ? ` (${script.noteTone})` : ""}`
-        : "",
-      "",
-      `Written by ${script.writer} · updated ${new Date(script.updatedAt).toLocaleDateString("en-IN")}`,
-    ].join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-    a.download = `${script.code} ${script.title}.txt`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    void downloadScriptPdf(script);
   };
 
   const onPdf = async (file: File) => {

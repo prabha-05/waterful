@@ -5,6 +5,7 @@ import type { ApprovedScript } from "@/lib/data/scripts";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import { Chip } from "@/components/ui/primitives";
 import { UploadButton } from "./upload-button";
+import { downloadScriptPdf } from "@/lib/script-pdf";
 
 /**
  * "Approved scripts waiting on you" — the handoff from the Script Library into
@@ -113,22 +114,7 @@ function ReadScript({
   onClose: () => void;
 }) {
   const download = () => {
-    const text = [
-      script.title,
-      `${script.code} · ${script.writer}`,
-      [script.angle, script.personas.join(", "), script.format, script.runtime ? `${script.runtime}s` : null]
-        .filter(Boolean)
-        .join(" · "),
-      "",
-      script.hookLine ? `HOOK — ${script.hookLine}` : "",
-      "",
-      script.body,
-    ].join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-    a.download = `${script.code} ${script.title}.txt`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    void downloadScriptPdf(script);
   };
 
   return (
