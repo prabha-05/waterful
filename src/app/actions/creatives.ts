@@ -18,6 +18,8 @@ import {
 } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
 import { getScriptTagging, markScriptReceived } from "@/app/actions/scripts";
+import { getTaxonomy } from "@/lib/data/taxonomy";
+import { resolveFormat, tagLabelFor } from "@/lib/script-format";
 import { fetchMetaData } from "@/lib/meta";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -103,12 +105,29 @@ export async function createCreative(data: {
    */
   const inherited = data.scriptId ? await getScriptTagging(data.scriptId) : null;
   if (inherited) {
+    // The script stopped carrying Type/Sub-type when the writer's tagging moved
+    // to Creative Format / Content Format. Those two columns still drive the
+    // Library (thumbnails branch on type), so derive them from the tags.
+    let derived: { typeId: string | null; subtypeId: string | null } = {
+      typeId: inherited.typeId,
+      subtypeId: inherited.subtypeId,
+    };
+    if (!derived.typeId || !derived.subtypeId) {
+      const tax = await getTaxonomy();
+      const r = resolveFormat(
+        tax.types,
+        tagLabelFor(tax.tagGroups, inherited.tagIds, "creative_format"),
+        tagLabelFor(tax.tagGroups, inherited.tagIds, "content_format"),
+        data.files.length,
+      );
+      derived = { typeId: derived.typeId || r.typeId, subtypeId: derived.subtypeId || r.subtypeId };
+    }
     data = {
       ...data,
       title: inherited.title || data.title,
       angleId: inherited.angleId || data.angleId,
-      typeId: inherited.typeId || data.typeId,
-      subtypeId: inherited.subtypeId || data.subtypeId,
+      typeId: derived.typeId || data.typeId,
+      subtypeId: derived.subtypeId || data.subtypeId,
       awarenessId: inherited.awarenessId ?? data.awarenessId,
       hookId: inherited.hookId ?? data.hookId,
       personaIds: inherited.personaIds.length ? inherited.personaIds : data.personaIds,
@@ -120,7 +139,7 @@ export async function createCreative(data: {
   // All-required validation (mirrors the client gate; never trust the client).
   if (!title || !data.typeId || !data.subtypeId || !data.angleId || !data.reviewLink.trim() || !data.reviewSummary.trim())
     return { ok: false, error: "All fields (title, format, angle, review link + summary) are required." };
-  if (data.personaIds.length === 0)
+  if (data.personaIds.length === 0 && !data.scriptId)
     return { ok: false, error: "Pick at least one persona." };
   if (data.files.length === 0)
     return { ok: false, error: "Add at least one file." };

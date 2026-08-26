@@ -81,6 +81,7 @@ export function ApprovedScripts({
                     awarenessId: s.awarenessId,
                     hookId: s.hookId,
                     personaIds: s.personaIds,
+                    tagIds: s.tagIds,
                   }}
                 />
               )}
@@ -171,6 +172,7 @@ function ReadScript({
                 awarenessId: script.awarenessId,
                 hookId: script.hookId,
                 personaIds: script.personaIds,
+                tagIds: script.tagIds,
               }}
             />
           )}

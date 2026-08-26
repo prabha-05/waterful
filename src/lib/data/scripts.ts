@@ -199,6 +199,7 @@ export type ApprovedScript = ScriptRow & {
   awarenessId: string | null;
   hookId: string | null;
   personaIds: string[];
+  tagIds: string[];
 };
 
 /** Approved scripts with no creative yet — the Creative Library's waiting queue. */
@@ -211,6 +212,7 @@ export async function getApprovedScripts(): Promise<ApprovedScript[]> {
            h.label as hook_label,
            coalesce(string_agg(distinct p.label, '||'), '') as personas,
            coalesce(string_agg(distinct sp.persona_id::text, '||'), '') as persona_ids,
+           coalesce(string_agg(distinct stg.tag_id::text, '||'), '') as tag_ids,
            w.name as writer, c.name as creator
     from scripts s
     join users w on w.id = s.writer_id
@@ -221,6 +223,7 @@ export async function getApprovedScripts(): Promise<ApprovedScript[]> {
     left join hook_types h on h.id = s.hook_id
     left join script_personas sp on sp.script_id = s.id
     left join personas p on p.id = sp.persona_id
+    left join script_tags stg on stg.script_id = s.id
     where s.stage in ('approved','creators')
       and not exists (select 1 from creatives cr where cr.script_id = s.id)
     group by s.id, a.label, t.label, st.label, h.label, w.name, c.name
@@ -236,6 +239,7 @@ export async function getApprovedScripts(): Promise<ApprovedScript[]> {
       awarenessId: (row.awareness_id as string | null) ?? null,
       hookId: (row.hook_id as string | null) ?? null,
       personaIds: row.persona_ids ? String(row.persona_ids).split("||").filter(Boolean) : [],
+      tagIds: row.tag_ids ? String(row.tag_ids).split("||").filter(Boolean) : [],
     };
   });
 }

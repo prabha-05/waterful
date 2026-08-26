@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Taxonomy } from "@/lib/data/taxonomy";
 import { createCreative } from "@/app/actions/creatives";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { resolveFormat, tagLabelFor } from "@/lib/script-format";
 import {
   Button,
   Field,
@@ -139,9 +140,25 @@ function UploadModal({
   const [reviewSummary, setReviewSummary] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  const selectedType = taxonomy.types.find((t) => t.id === typeId);
+  // From a script the writer has already decided everything: the format comes
+  // off its Creative/Content Format tags, so the uploader is never asked again.
+  const fromScript = !!script;
+  const scriptFormat = useMemo(() => {
+    if (!script) return null;
+    const ids = script.tagIds ?? [];
+    return resolveFormat(
+      taxonomy.types,
+      tagLabelFor(taxonomy.tagGroups, ids, "creative_format"),
+      tagLabelFor(taxonomy.tagGroups, ids, "content_format"),
+      files.length || 1,
+    );
+  }, [script, taxonomy, files.length]);
+
+  const selectedType = fromScript
+    ? taxonomy.types.find((t) => t.id === scriptFormat?.typeId)
+    : taxonomy.types.find((t) => t.id === typeId);
   const isCarousel = selectedType?.label === "Carousel";
-  const formatReady = !!typeId && !!subtypeId;
+  const formatReady = fromScript ? !!scriptFormat?.typeId : !!typeId && !!subtypeId;
 
   const personaOptions = useMemo(
     () =>
@@ -153,9 +170,9 @@ function UploadModal({
 
   const valid =
     formatReady &&
-    !!angleId &&
-    personaIds.length > 0 &&
-    !!title.trim() &&
+    (fromScript || !!angleId) &&
+    (fromScript || personaIds.length > 0) &&
+    (fromScript || !!title.trim()) &&
     files.length > 0 &&
     !!reviewLink.trim() &&
     !!reviewSummary.trim();
@@ -203,13 +220,13 @@ function UploadModal({
 
       const res = await createCreative({
         title,
-        typeId,
-        subtypeId,
         angleId,
         awarenessId: awarenessId || null,
         hookId: hookId || null,
         reviewLink,
         reviewSummary,
+        typeId: fromScript ? (scriptFormat?.typeId ?? "") : typeId,
+        subtypeId: fromScript ? (scriptFormat?.subtypeId ?? "") : subtypeId,
         personaIds,
         tagIds: Object.values(tagsByGroup).flat(),
         files: uploaded,
@@ -282,7 +299,7 @@ function UploadModal({
           )}
 
           {/* Format frame — pick first */}
-          <div className={script?.typeId ? "hidden" : "rounded-[var(--radius-control)] border border-line bg-surface-2 p-3"}>
+          <div className={fromScript ? "hidden" : "rounded-[var(--radius-control)] border border-line bg-surface-2 p-3"}>
             <div className="mb-2 text-[13px] font-semibold text-ink-2">Format</div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Type" required>
@@ -334,7 +351,7 @@ function UploadModal({
             </Field>
           </div>
 
-          <div className={script?.angleId ? "hidden" : "contents"}>
+          <div className={fromScript ? "hidden" : "contents"}>
             <Field label="Angle" required>
               <Select value={angleId} onChange={(e) => { setAngleId(e.target.value); setPersonaIds([]); }}>
                 <option value="">Select…</option>
@@ -343,6 +360,7 @@ function UploadModal({
             </Field>
           </div>
 
+          <div className={fromScript ? "hidden" : "contents"}>
           <Field label="Persona (mapped to the angle)" required>
             {!angleId ? (
               <p className="text-xs text-muted">Choose an angle first.</p>
@@ -376,6 +394,7 @@ function UploadModal({
             value={tagsByGroup}
             onChange={setTagsByGroup}
           />
+          </div>
 
           {error && <p className="text-sm text-red">{error}</p>}
         </div>
