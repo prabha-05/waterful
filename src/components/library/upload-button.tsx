@@ -143,6 +143,7 @@ function UploadModal({
   // From a script the writer has already decided everything: the format comes
   // off its Creative/Content Format tags, so the uploader is never asked again.
   const fromScript = !!script;
+  const scriptTagIds = script?.tagIds ?? [];
   const scriptFormat = useMemo(() => {
     if (!script) return null;
     const ids = script.tagIds ?? [];
@@ -268,32 +269,44 @@ function UploadModal({
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
                 {[
                   ["Angle", taxonomy.angles.find((a) => a.id === angleId)?.label],
-                  ["Format", [selectedType?.label, selectedType?.subtypes.find((x) => x.id === subtypeId)?.label].filter(Boolean).join(" · ")],
-                  ["Awareness", taxonomy.awareness.find((a) => a.id === awarenessId)?.label],
-                  ["Hook", taxonomy.hooks.find((h) => h.id === hookId)?.label],
+                  // Everything else the writer set, in Master Data order. Its
+                  // own value, not the Type/Sub-type these get mapped onto.
+                  ...taxonomy.tagGroups
+                    .filter((g) => !g.multi)
+                    .map((g) => [
+                      g.label,
+                      g.options.filter((o) => scriptTagIds.includes(o.id)).map((o) => o.label).join(", "),
+                    ]),
                 ].map(([k, v]) => (
                   <div key={k as string}>
                     <dt className="text-[11px] uppercase tracking-wide text-muted">{k}</dt>
                     <dd className="text-ink-2">{(v as string) || "—"}</dd>
                   </div>
                 ))}
-                <div className="col-span-2">
-                  <dt className="text-[11px] uppercase tracking-wide text-muted">Personas</dt>
-                  <dd className="mt-1 flex flex-wrap gap-1">
-                    {personaIds.length === 0 ? (
-                      <span className="text-ink-2">—</span>
-                    ) : (
-                      personaIds.map((id) => (
-                        <span
-                          key={id}
-                          className="inline-flex items-center rounded-[var(--radius-pill)] bg-brand-chip px-2.5 py-0.5 text-[11px] font-medium text-brand-deep"
-                        >
-                          {taxonomy.personas.find((p) => p.id === id)?.label ?? id}
-                        </span>
-                      ))
-                    )}
-                  </dd>
-                </div>
+                {taxonomy.tagGroups
+                  .filter((g) => g.multi)
+                  .map((g) => {
+                    const picked = g.options.filter((o) => scriptTagIds.includes(o.id));
+                    return (
+                      <div key={g.id} className="col-span-2">
+                        <dt className="text-[11px] uppercase tracking-wide text-muted">{g.label}</dt>
+                        <dd className="mt-1 flex flex-wrap gap-1">
+                          {picked.length === 0 ? (
+                            <span className="text-ink-2">—</span>
+                          ) : (
+                            picked.map((o) => (
+                              <span
+                                key={o.id}
+                                className="inline-flex items-center rounded-[var(--radius-pill)] bg-brand-chip px-2.5 py-0.5 text-[11px] font-medium text-brand-deep"
+                              >
+                                {o.label}
+                              </span>
+                            ))
+                          )}
+                        </dd>
+                      </div>
+                    );
+                  })}
               </dl>
             </div>
           )}
