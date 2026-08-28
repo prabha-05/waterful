@@ -4,7 +4,7 @@ import type { CreativeCard as Card } from "@/lib/data/creatives";
 import { formatRoas } from "@/lib/format";
 import { TYPE_TINT } from "@/lib/status";
 import { Chip, ScorePill, StatusPill } from "@/components/ui/primitives";
-import { useFormat } from "@/components/providers/settings-provider";
+import { useDate, useFormat } from "@/components/providers/settings-provider";
 import { VideoThumb } from "./video-thumb";
 
 export function CreativeCardView({
@@ -15,6 +15,7 @@ export function CreativeCardView({
   onClick: () => void;
 }) {
   const fmt = useFormat();
+  const fmtDate = useDate();
   return (
     <button
       onClick={onClick}
@@ -74,6 +75,17 @@ export function CreativeCardView({
             {card.adCount > 0 && ` · ${card.adCount} ad${card.adCount > 1 ? "s" : ""}`}
           </span>
           <StatusPill status={card.status} />
+        </div>
+
+        {/* When it stopped — from Meta's activity log, not inferred from spend. */}
+        <div className="-mt-1 text-[11px] text-muted">
+          {card.pausedAt ? (
+            <>Paused <span className="text-ink-3">{fmtDate(card.pausedAt)}</span></>
+          ) : card.adCount > 0 ? (
+            <span className="text-ink-3">Running</span>
+          ) : (
+            "Not linked to an ad"
+          )}
         </div>
 
         <h3 className="line-clamp-2 text-sm font-semibold text-ink">{card.title}</h3>

@@ -10,6 +10,7 @@
  */
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { loadPauseIndex, type PauseIndex } from "./pauses";
 import {
   adActivations,
   adDemographicMetrics,
@@ -56,7 +57,12 @@ export async function runMetaSync(
 
   try {
     const ads = await db
-      .select({ adId: adActivations.metaAdId, type: types.label })
+      .select({
+        adId: adActivations.metaAdId,
+        type: types.label,
+        adsetId: adActivations.adsetId,
+        campaignId: adActivations.campaignId,
+      })
       .from(adActivations)
       .innerJoin(creatives, eq(creatives.id, adActivations.creativeId))
       .innerJoin(types, eq(types.id, creatives.typeId));
@@ -66,6 +72,13 @@ export async function runMetaSync(
       since = new Date();
       since.setDate(since.getDate() - 28);
     }
+
+    /**
+     * When each ad stopped, read once for the whole account rather than per ad.
+     * A full rebuild wants the whole log; a 28-day run only needs recent
+     * changes, and anything older is already stamped.
+     */
+    const pauses = await loadPauseIndex(window === "full" ? undefined : since);
 
     /**
      * Ads run a few at a time rather than one after another. Each ad is ~1s of
@@ -82,7 +95,7 @@ export async function runMetaSync(
       while (cursor < ads.length) {
         const ad = ads[cursor++];
         try {
-          await syncOneAd(ad, since, window);
+          await syncOneAd(ad, since, window, pauses);
           count++;
         } catch (e) {
           // One ad failing (rate limit, deleted in Meta) must not lose the rest.
@@ -129,9 +142,10 @@ export async function runMetaSync(
 
 /** One ad's pull + upserts. Extracted so the runner can process several at once. */
 async function syncOneAd(
-  ad: { adId: string; type: string },
+  ad: { adId: string; type: string; adsetId: string | null; campaignId: string | null },
   since: Date | undefined,
   window: SyncWindow,
+  pauses: PauseIndex,
 ) {
   const pull = await fetchMetaData(ad.adId, {
     isVideo: ad.type === "Video",
@@ -228,13 +242,18 @@ async function syncOneAd(
       });
   }
 
+  const stopped = pull.activation.status !== "active";
   await db
     .update(adActivations)
-    .set({ status: pull.activation.status, lastSyncedAt: new Date() })
-    .where(eq(adActivations.metaAdId, ad.adId));
-
-  await db
-    .update(adActivations)
-    .set({ status: pull.activation.status, lastSyncedAt: new Date() })
+    .set({
+      status: pull.activation.status,
+      lastSyncedAt: new Date(),
+      // Cleared when it is running again, so a restarted ad stops reading as
+      // paused. Keeps whatever is already stored if the log has nothing — a
+      // 28-day window will not contain an older pause.
+      pausedAt: stopped
+        ? (pauses.resolve(ad) ?? sql`${adActivations.pausedAt}`)
+        : null,
+    })
     .where(eq(adActivations.metaAdId, ad.adId));
 }

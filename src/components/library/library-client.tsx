@@ -10,7 +10,7 @@ import { CreativeCardView } from "./creative-card";
 import { CreativeDetail } from "./creative-detail";
 import { ScoreExplainer } from "./score-explainer";
 
-type SortKey = "recent" | "score" | "spend" | "roas";
+type SortKey = "recent" | "paused" | "score" | "spend" | "roas";
 const STATUSES = ["draft", "live", "paused", "archived"] as const;
 
 export function LibraryClient({
@@ -56,6 +56,8 @@ export function LibraryClient({
         case "score": return b.score - a.score;
         case "spend": return b.spend - a.spend;
         case "roas": return b.roas - a.roas;
+        // Most recently paused first; still-running and unlinked sink.
+        case "paused": return (b.pausedAt ?? "").localeCompare(a.pausedAt ?? "");
         default: return b.createdAt.localeCompare(a.createdAt);
       }
     });
@@ -77,8 +79,9 @@ export function LibraryClient({
           placeholder="Search title, angle, persona, type…"
           className="h-9 w-72 rounded-[var(--radius-control)] border border-[var(--control-border)] bg-surface px-3 text-sm text-ink outline-none focus:border-brand"
         />
-        <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 w-36">
+        <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="h-9 w-40">
           <option value="recent">Recent</option>
+          <option value="paused">Last paused</option>
           <option value="score">Score</option>
           <option value="spend">Spend</option>
           <option value="roas">ROAS</option>

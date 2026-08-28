@@ -356,6 +356,8 @@ export const adActivations = pgTable("ad_activations", {
   // Mirrored from Meta (read-only, §6).
   status: adStatus("status").notNull().default("unknown"),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  // When it last stopped delivering, from Meta's activity log. Null while running.
+  pausedAt: timestamp("paused_at", { withTimezone: true }),
 });
 
 // Daily grain. ADDITIVE metrics only get summed (§6 G1). reach is stored per day

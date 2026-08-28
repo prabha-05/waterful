@@ -22,6 +22,12 @@ export type CreativeCard = {
   thumbUrl?: string | null; // resolved signed URL (set in the page, not the query)
   sourcePath: string | null; // the actual file — used to heal a missing poster
   hasPoster: boolean; // false → card captures a frame and stores it once
+  /**
+   * When this creative last stopped running — the newest pause across its ads,
+   * from Meta's activity log. Null while something is still delivering, or when
+   * it has no ads at all.
+   */
+  pausedAt: string | null;
 };
 
 /**
@@ -61,6 +67,7 @@ function toCard(r: Record<string, unknown>): CreativeCard {
     thumbPath: (r.thumb_path as string | null) ?? null,
     sourcePath: (r.source_path as string | null) ?? null,
     hasPoster: r.has_poster === true,
+    pausedAt: r.paused_at ? String(r.paused_at) : null,
   };
 }
 
@@ -72,6 +79,9 @@ export async function listCreatives(): Promise<CreativeCard[]> {
            coalesce(string_agg(distinct p.label, '||') filter (where p.label is not null), '') as personas,
            (select count(*)::int from ad_activations aa where aa.creative_id = c.id) as ad_count,
            (select string_agg(distinct aa.status::text, ',') from ad_activations aa where aa.creative_id = c.id) as ad_statuses,
+           -- Newest pause across its ads; null while any ad is still running.
+           (select case when bool_or(aa.status = 'active') then null else max(aa.paused_at) end
+              from ad_activations aa where aa.creative_id = c.id) as paused_at,
            -- Prefer the small poster JPEG; fall back to the file itself.
            (select coalesce(cf.poster_path, cf.storage_path) from creative_files cf where cf.creative_id = c.id order by position limit 1) as thumb_path,
            (select cf.storage_path from creative_files cf where cf.creative_id = c.id order by position limit 1) as source_path,
