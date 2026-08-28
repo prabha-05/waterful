@@ -75,10 +75,12 @@ export async function runMetaSync(
 
     /**
      * When each ad stopped, read once for the whole account rather than per ad.
-     * A full rebuild wants the whole log; a 28-day run only needs recent
-     * changes, and anything older is already stamped.
+     * Deliberately the WHOLE log every run, not just the sync window: it is
+     * ~7 pages against dozens of per-ad insight calls, and bounding it to 28
+     * days would mean an ad paused before that never gets a date at all unless
+     * someone remembers to run a Full Rebuild. Cheap enough to just be correct.
      */
-    const pauses = await loadPauseIndex(window === "full" ? undefined : since);
+    const pauses = await loadPauseIndex();
 
     /**
      * Ads run a few at a time rather than one after another. Each ad is ~1s of
@@ -249,11 +251,9 @@ async function syncOneAd(
       status: pull.activation.status,
       lastSyncedAt: new Date(),
       // Cleared when it is running again, so a restarted ad stops reading as
-      // paused. Keeps whatever is already stored if the log has nothing — a
-      // 28-day window will not contain an older pause.
-      pausedAt: stopped
-        ? (pauses.resolve(ad) ?? sql`${adActivations.pausedAt}`)
-        : null,
+      // paused. The log is read in full, so a null here means Meta genuinely
+      // has no pause event for it rather than the window being too short.
+      pausedAt: stopped ? pauses.resolve(ad) : null,
     })
     .where(eq(adActivations.metaAdId, ad.adId));
 }
