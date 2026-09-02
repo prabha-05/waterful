@@ -141,6 +141,13 @@
       "when": 1787050000000,
       "tag": "0019_concept_off_script",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787060000000,
+      "tag": "0020_product_usp_on_script",
+      "breakpoints": true
     }
   ]
 }
