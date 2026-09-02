@@ -288,7 +288,9 @@ export function ScriptDrawer({
 
                 <div className="mt-3 flex flex-col gap-3">
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-[13px] font-medium text-ink-2">Angle</span>
+                    <span className="text-[13px] font-medium text-ink-2">
+                      Angle <span className="text-red">*</span>
+                    </span>
                     <Select
                       value={angleId}
                       disabled={!canEdit}
@@ -308,7 +310,7 @@ export function ScriptDrawer({
 
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[13px] font-medium text-ink-2">
-                      Personas{" "}
+                      Personas <span className="text-red">*</span>{" "}
                       <span className="font-normal text-muted">
                         · mapped to the angle · pick one or more
                       </span>
