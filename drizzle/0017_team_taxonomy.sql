@@ -39,6 +39,21 @@ where ct.tag_id in (
         and group_id = (select id from tag_groups where key = 'stage')));
 --> statement-breakpoint
 
+-- Scripts carry this tag too — move them before deleting, or six scripts
+-- silently lose their stage.
+update script_tags st set tag_id = (
+  select id from tags where label = 'Seeker'
+    and group_id = (select id from tag_groups where key = 'stage'))
+where st.tag_id in (
+  select id from tags where label = 'The Aware'
+    and group_id = (select id from tag_groups where key = 'stage'))
+  and not exists (
+    select 1 from script_tags x
+    where x.script_id = st.script_id
+      and x.tag_id = (select id from tags where label = 'Seeker'
+        and group_id = (select id from tag_groups where key = 'stage')));
+--> statement-breakpoint
+
 delete from creative_tags where tag_id in (
   select id from tags where label = 'The Aware'
     and group_id = (select id from tag_groups where key = 'stage'));
