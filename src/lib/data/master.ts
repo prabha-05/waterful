@@ -10,6 +10,7 @@ export type TagGroupRow = {
   key: string;
   label: string;
   multi: boolean;
+  showOnScript: boolean;
   archived: boolean;
   tags: TagRow[];
 };
@@ -62,7 +63,8 @@ export async function getMasterData(): Promise<MasterData> {
     from hook_types h order by h.label`) as unknown as LabelRow[];
 
   const groupRows = (await sqlClient`
-    select g.id, g.key, g.label, g.multi, (g.archived_at is not null) as archived
+    select g.id, g.key, g.label, g.multi, g.show_on_script as "showOnScript",
+           (g.archived_at is not null) as archived
     from tag_groups g order by g.position, g.label`) as unknown as Omit<TagGroupRow, "tags">[];
 
   const tagRows = (await sqlClient`

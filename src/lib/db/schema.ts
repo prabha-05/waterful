@@ -176,6 +176,9 @@ export const tagGroups = pgTable("tag_groups", {
   key: text("key").notNull().unique(),
   label: text("label").notNull(),
   multi: boolean("multi").notNull().default(false),
+  // Whether the Script Library asks for this dimension. The team's model is
+  // Persona → Angle → Stage → Concept; everything else stays in Master Data.
+  showOnScript: boolean("show_on_script").notNull().default(false),
   position: integer("position").notNull().default(0),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
 });

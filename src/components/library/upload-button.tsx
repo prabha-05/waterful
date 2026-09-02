@@ -374,6 +374,7 @@ function UploadModal({
           </div>
 
           <div className={fromScript ? "hidden" : "contents"}>
+          <div className={script?.personaIds?.length ? "hidden" : "contents"}>
           <Field label="Persona (mapped to the angle)" required>
             {!angleId ? (
               <p className="text-xs text-muted">Choose an angle first.</p>
@@ -401,6 +402,7 @@ function UploadModal({
               </div>
             )}
           </Field>
+          </div>
 
           <TagGroupFields
             groups={taxonomy.tagGroups}

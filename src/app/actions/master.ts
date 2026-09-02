@@ -208,3 +208,12 @@ export async function deleteTagGroup(id: string): Promise<ActionResult> {
   await sqlClient`delete from tag_groups where id = ${id}`;
   return ok();
 }
+
+/** Whether the Script Library asks for this dimension (Master Data toggle). */
+export async function setGroupOnScript(id: string, on: boolean): Promise<ActionResult> {
+  const g = await guard();
+  if (g) return g;
+  await sqlClient`update tag_groups set show_on_script = ${on} where id = ${id}`;
+  revalidatePath("/scripts");
+  return ok();
+}

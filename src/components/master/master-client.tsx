@@ -17,6 +17,7 @@ import {
   renameTaxonomy,
   setArchivedTag,
   setArchivedTaxonomy,
+  setGroupOnScript,
   type TaxKind,
 } from "@/app/actions/master";
 import { Button, Chip, Input, Select } from "@/components/ui/primitives";
@@ -305,6 +306,15 @@ function TagGroupList({
           <span className="text-[11px] text-muted">
             {group.tags.length} · {group.multi ? "several per creative" : "one per creative"}
           </span>
+          <label className="flex items-center gap-1.5 text-[11px] text-ink-3" title="Show this on the Script Library form">
+            <input
+              type="checkbox"
+              checked={group.showOnScript}
+              disabled={pending}
+              onChange={(e) => run(() => setGroupOnScript(group.id, e.target.checked))}
+            />
+            On script form
+          </label>
         </div>
         {inUse === 0 && (
           <button
