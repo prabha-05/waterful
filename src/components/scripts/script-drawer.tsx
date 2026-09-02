@@ -158,6 +158,18 @@ export function ScriptDrawer({
     });
   };
 
+  // Mirrors the server rule in advanceScript: angle, persona, and every
+  // dimension the script form asks for. Shown as a hint, enforced there.
+  const missingTags = script?.stage === "draft"
+    ? [
+        !angleId ? "Angle" : null,
+        personaIds.length === 0 ? "Persona" : null,
+        ...taxonomy.tagGroups
+          .filter((g) => g.showOnScript && !(tagsByGroup[g.id] ?? []).length)
+          .map((g) => g.label),
+      ].filter(Boolean) as string[]
+    : [];
+
   const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
   const allowedPersonas = angleId ? taxonomy.personas.filter((p) => allowedIds.has(p.id)) : [];
 
@@ -337,6 +349,7 @@ export function ScriptDrawer({
                   <div className="mt-3">
                     <TagGroupFields
                       groups={taxonomy.tagGroups.filter((g) => g.showOnScript)}
+                      required
                       value={tagsByGroup}
                       onChange={canEdit ? setTagsByGroup : () => {}}
                     />
@@ -511,6 +524,11 @@ export function ScriptDrawer({
                       </Button>
                     </span>
                   ))}
+                {missingTags.length > 0 && (
+                  <span className="mr-auto text-xs text-muted">
+                    Still to tag: <span className="text-ink-3">{missingTags.join(", ")}</span>
+                  </span>
+                )}
                 {canSendBack && (
                   <Button variant="danger" disabled={pending} onClick={() => setSendingBack(true)}>
                     Send back
@@ -518,11 +536,13 @@ export function ScriptDrawer({
                 )}
                 {def.next && (
                   <Button
-                    disabled={pending || !canAdvance}
+                    disabled={pending || !canAdvance || missingTags.length > 0}
                     title={
-                      !canAdvance && def.gate === "master"
-                        ? "Only someone who can manage master data may approve a script."
-                        : undefined
+                      missingTags.length > 0
+                        ? `Still to tag: ${missingTags.join(", ")}`
+                        : !canAdvance && def.gate === "master"
+                          ? "Only someone who can manage master data may approve a script."
+                          : undefined
                     }
                     onClick={() =>
                       run(async () => {

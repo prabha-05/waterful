@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { scriptActivity, scriptPersonas, scriptTags, scripts } from "@/lib/db/schema";
 import { requirePermission } from "@/lib/auth/guard";
@@ -178,6 +178,40 @@ export async function advanceScript(id: string): Promise<ScriptResult> {
 
   const from = current.stage as ScriptStage;
   const def = STAGE[from];
+
+  /**
+   * A script leaves Draft only once it is tagged. Required means exactly "asked
+   * for on the script form" — the show_on_script groups plus angle and persona —
+   * so ticking a dimension on in Master Data makes it mandatory here too, with
+   * no second list to keep in step.
+   */
+  if (from === "draft") {
+    const missing: string[] = [];
+    if (!current.angleId) missing.push("Angle");
+
+    const [{ n: personaCount } = { n: 0 }] = (await db.execute(
+      sql`select count(*)::int as n from script_personas where script_id = ${id}`,
+    )) as unknown as { n: number }[];
+    if (Number(personaCount) === 0) missing.push("Persona");
+
+    const gaps = (await db.execute(
+      sql`select g.label from tag_groups g
+          where g.show_on_script and g.archived_at is null
+            and not exists (
+              select 1 from script_tags st
+              join tags t on t.id = st.tag_id
+              where st.script_id = ${id} and t.group_id = g.id)
+          order by g.position`,
+    )) as unknown as { label: string }[];
+    missing.push(...gaps.map((r) => r.label));
+
+    if (missing.length) {
+      return {
+        ok: false,
+        error: `Tag the script before sending it for review — missing ${missing.join(", ")}.`,
+      };
+    }
+  }
   const to = def.next;
   if (!to || !def.gate) {
     return { ok: false, error: "This script is already at the end of the pipeline." };

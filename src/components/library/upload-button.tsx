@@ -435,10 +435,13 @@ export function TagGroupFields({
   groups,
   value,
   onChange,
+  required = false,
 }: {
   groups: Taxonomy["tagGroups"];
   value: Record<string, string[]>;
   onChange: (next: Record<string, string[]>) => void;
+  /** Mark every rendered dimension as required (the script form does). */
+  required?: boolean;
 }) {
   const usable = groups.filter((g) => g.options.length > 0);
   if (usable.length === 0) return null;
@@ -449,7 +452,7 @@ export function TagGroupFields({
     <>
       {usable.map((g) =>
         g.multi ? (
-          <Field key={g.id} label={`${g.label} (pick any)`}>
+          <Field key={g.id} label={`${g.label} (pick any)`} required={required}>
             <div className="flex flex-wrap gap-2">
               {g.options.map((o) => {
                 const on = (value[g.id] ?? []).includes(o.id);
@@ -473,7 +476,7 @@ export function TagGroupFields({
             </div>
           </Field>
         ) : (
-          <Field key={g.id} label={g.label}>
+          <Field key={g.id} label={g.label} required={required}>
             <Select
               value={value[g.id]?.[0] ?? ""}
               onChange={(e) => set(g.id, e.target.value ? [e.target.value] : [])}
