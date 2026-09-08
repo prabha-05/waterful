@@ -60,6 +60,33 @@ export async function createTaxonomy(kind: Exclude<TaxKind, "subtype">, label: s
   return ok();
 }
 
+/**
+ * The script writer hit an angle that isn't in Master Data yet. Gated on
+ * "script", not "master": adding a missing angle is part of writing one, while
+ * renaming/archiving the list stays with admins. Returns the existing angle if
+ * the label is already there, so two writers can't create a duplicate.
+ */
+export async function createAngleForScript(
+  label: string,
+): Promise<{ ok: true; id: string; label: string } | { ok: false; error: string }> {
+  try {
+    await requirePermission("script");
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const l = label.trim();
+  if (!l) return { ok: false, error: "Enter an angle." };
+  const [existing] = await sqlClient`
+    select id, label from angles where lower(label) = lower(${l}) and archived_at is null limit 1
+  `;
+  if (existing) return { ok: true, id: existing.id as string, label: existing.label as string };
+  const [row] = await sqlClient`insert into angles (label) values (${l}) returning id, label`;
+  clearTaxonomyCache();
+  revalidatePath("/master-data");
+  revalidatePath("/scripts");
+  return { ok: true, id: row.id as string, label: row.label as string };
+}
+
 export async function createSubtype(typeId: string, label: string): Promise<ActionResult> {
   const g = await guard();
   if (g) return g;

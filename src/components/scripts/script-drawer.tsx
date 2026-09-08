@@ -9,6 +9,7 @@ import type { Taxonomy } from "@/lib/data/taxonomy";
 import type { Permissions } from "@/lib/auth/permissions";
 import { advanceScript, deleteScript, rejectScript, updateScript } from "@/app/actions/scripts";
 import { fetchScript } from "@/app/actions/script-read";
+import { createAngleForScript } from "@/app/actions/master";
 import { extractPdfText } from "@/app/actions/script-pdf";
 import { Button, Drawer, Select, Textarea } from "@/components/ui/primitives";
 import { useDate } from "@/components/providers/settings-provider";
@@ -48,6 +49,10 @@ export function ScriptDrawer({
   // The 2026-08-24 dimensions, keyed by group id.
   const [tagsByGroup, setTagsByGroup] = useState<Record<string, string[]>>({});
   const [personaIds, setPersonaIds] = useState<string[]>([]);
+  // Angles the writer added from this drawer (see addAngle).
+  const [newAngles, setNewAngles] = useState<{ id: string; label: string }[]>([]);
+  const [addingAngle, setAddingAngle] = useState(false);
+  const [newAngle, setNewAngle] = useState("");
   const [dirty, setDirty] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfNote, setPdfNote] = useState<string | null>(null);
@@ -170,23 +175,33 @@ export function ScriptDrawer({
       ].filter(Boolean) as string[]
     : [];
 
-  // Persona is picked first, then the angle narrows to what those personas are
-  // mapped to in Master Data · Angle ↔ Persona (team model, Persona → Angle).
-  const allowedAngleIds = new Set(personaIds.flatMap((id) => taxonomy.personaAngleMap[id] ?? []));
-  const allowedAngles = personaIds.length
-    ? taxonomy.angles.filter((a) => allowedAngleIds.has(a.id))
-    : [];
+  // Persona and Angle are independent lists — the writer picks each on its own
+  // (no Angle ↔ Persona filtering). Angles created here appear in the dropdown
+  // straight away, before the page refresh brings them back in the taxonomy.
+  const angleOptions = [
+    ...taxonomy.angles,
+    ...newAngles.filter((n) => !taxonomy.angles.some((a) => a.id === n.id)),
+  ];
 
   const togglePersona = (pid: string) => {
-    const next = personaIds.includes(pid)
-      ? personaIds.filter((x) => x !== pid)
-      : [...personaIds, pid];
-    touch(setPersonaIds)(next);
-    // Dropping a persona can orphan the chosen angle — clear it rather than
-    // saving an angle the personas are no longer mapped to.
-    if (angleId && !next.some((id) => (taxonomy.personaAngleMap[id] ?? []).includes(angleId))) {
-      setAngleId("");
-    }
+    touch(setPersonaIds)(
+      personaIds.includes(pid) ? personaIds.filter((x) => x !== pid) : [...personaIds, pid],
+    );
+  };
+
+  const addAngle = () => {
+    const label = newAngle.trim();
+    if (!label) return;
+    setErr(null);
+    start(async () => {
+      const res = await createAngleForScript(label);
+      if (!res.ok) return setErr(res.error);
+      setNewAngles((cur) => [...cur, { id: res.id, label: res.label }]);
+      touch(setAngleId)(res.id);
+      setNewAngle("");
+      setAddingAngle(false);
+      onChanged(); // refresh the page taxonomy so everyone else sees it too
+    });
   };
 
   const download = () => {
@@ -331,30 +346,56 @@ export function ScriptDrawer({
                     </div>
                   </div>
 
-                  <label className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-1.5">
                     <span className="text-[13px] font-medium text-ink-2">
-                      Angle <span className="text-red">*</span>{" "}
-                      <span className="font-normal text-muted">· mapped to the persona</span>
+                      Angle <span className="text-red">*</span>
                     </span>
-                    {personaIds.length === 0 ? (
-                      <p className="text-sm text-muted">Choose a persona first.</p>
-                    ) : allowedAngles.length === 0 ? (
-                      <p className="text-sm text-muted">No angles mapped to this persona yet.</p>
-                    ) : (
-                      <Select
-                        value={angleId}
-                        disabled={!canEdit}
-                        onChange={(e) => touch(setAngleId)(e.target.value)}
-                      >
-                        <option value="">Not decided yet</option>
-                        {allowedAngles.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.label}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </label>
+                    <Select
+                      value={angleId}
+                      disabled={!canEdit}
+                      onChange={(e) => touch(setAngleId)(e.target.value)}
+                    >
+                      <option value="">Not decided yet</option>
+                      {angleOptions.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label}
+                        </option>
+                      ))}
+                    </Select>
+                    {canEdit &&
+                      (addingAngle ? (
+                        <div className="flex gap-2">
+                          <input
+                            autoFocus
+                            value={newAngle}
+                            onChange={(e) => setNewAngle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addAngle();
+                              }
+                              if (e.key === "Escape") setAddingAngle(false);
+                            }}
+                            placeholder="New angle — in your words"
+                            className="min-w-0 flex-1 rounded-[var(--radius-control)] border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+                          />
+                          <Button variant="secondary" onClick={addAngle} disabled={pending || !newAngle.trim()}>
+                            Add
+                          </Button>
+                          <Button variant="secondary" onClick={() => { setAddingAngle(false); setNewAngle(""); }}>
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setAddingAngle(true)}
+                          className="self-start text-xs font-medium text-brand hover:underline"
+                        >
+                          + Angle not in the list? Add it
+                        </button>
+                      ))}
+                  </div>
 
                   <div className="mt-3">
                     <TagGroupFields

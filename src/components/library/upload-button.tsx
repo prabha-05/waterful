@@ -161,23 +161,9 @@ function UploadModal({
   const isCarousel = selectedType?.label === "Carousel";
   const formatReady = fromScript ? !!scriptFormat?.typeId : !!typeId && !!subtypeId;
 
-  // Persona first, then the angles mapped to it (team model, Persona → Angle).
-  const angleOptions = useMemo(() => {
-    if (!personaIds.length) return [];
-    const allowed = new Set(personaIds.flatMap((id) => taxonomy.personaAngleMap[id] ?? []));
-    return taxonomy.angles.filter((a) => allowed.has(a.id));
-  }, [taxonomy, personaIds]);
-
-  const togglePersona = (pid: string) => {
-    const next = personaIds.includes(pid)
-      ? personaIds.filter((x) => x !== pid)
-      : [...personaIds, pid];
-    setPersonaIds(next);
-    // Don't leave an angle selected that no chosen persona maps to.
-    if (angleId && !next.some((id) => (taxonomy.personaAngleMap[id] ?? []).includes(angleId))) {
-      setAngleId("");
-    }
-  };
+  // Persona and Angle are independent — no Angle ↔ Persona filtering.
+  const togglePersona = (pid: string) =>
+    setPersonaIds((cur) => (cur.includes(pid) ? cur.filter((x) => x !== pid) : [...cur, pid]));
 
   const valid =
     formatReady &&
@@ -397,17 +383,11 @@ function UploadModal({
           </Field>
           </div>
 
-          <Field label="Angle (mapped to the persona)" required>
-            {personaIds.length === 0 ? (
-              <p className="text-xs text-muted">Choose a persona first.</p>
-            ) : angleOptions.length === 0 ? (
-              <p className="text-xs text-muted">No angles mapped to this persona.</p>
-            ) : (
-              <Select value={angleId} onChange={(e) => setAngleId(e.target.value)}>
-                <option value="">Select…</option>
-                {angleOptions.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-              </Select>
-            )}
+          <Field label="Angle" required>
+            <Select value={angleId} onChange={(e) => setAngleId(e.target.value)}>
+              <option value="">Select…</option>
+              {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </Select>
           </Field>
 
           <TagGroupFields

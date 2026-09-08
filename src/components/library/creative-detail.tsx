@@ -363,21 +363,9 @@ function EditTagsModal({
   );
 
   const selectedType = taxonomy.types.find((t) => t.id === typeId);
-  // Persona first, then the angles mapped to it.
-  const allowedAngleIds = new Set(personaIds.flatMap((id) => taxonomy.personaAngleMap[id] ?? []));
-  const angleOptions = personaIds.length
-    ? taxonomy.angles.filter((a) => allowedAngleIds.has(a.id))
-    : [];
-
-  const togglePersona = (pid: string) => {
-    const next = personaIds.includes(pid)
-      ? personaIds.filter((x) => x !== pid)
-      : [...personaIds, pid];
-    setPersonaIds(next);
-    if (angleId && !next.some((id) => (taxonomy.personaAngleMap[id] ?? []).includes(angleId))) {
-      setAngleId("");
-    }
-  };
+  // Persona and Angle are independent — no Angle ↔ Persona filtering.
+  const togglePersona = (pid: string) =>
+    setPersonaIds((cur) => (cur.includes(pid) ? cur.filter((x) => x !== pid) : [...cur, pid]));
 
   function save() {
     setError(null);
@@ -426,17 +414,11 @@ function EditTagsModal({
               })}
             </div>
           </Field>
-          <Field label="Angle (mapped to the persona)">
-            {personaIds.length === 0 ? (
-              <p className="text-xs text-muted">Choose a persona first.</p>
-            ) : angleOptions.length === 0 ? (
-              <p className="text-xs text-muted">No angles mapped to this persona.</p>
-            ) : (
-              <Select value={angleId} onChange={(e) => setAngleId(e.target.value)}>
-                <option value="">Select…</option>
-                {angleOptions.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-              </Select>
-            )}
+          <Field label="Angle">
+            <Select value={angleId} onChange={(e) => setAngleId(e.target.value)}>
+              <option value="">Select…</option>
+              {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </Select>
           </Field>
           <TagGroupFields groups={taxonomy.tagGroups} value={tagsByGroup} onChange={setTagsByGroup} />
           {error && <p className="text-sm text-red">{error}</p>}

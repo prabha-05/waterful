@@ -144,13 +144,8 @@ export async function createCreative(data: {
   if (data.files.length === 0)
     return { ok: false, error: "Add at least one file." };
 
-  // Persona must be mapped to the chosen angle (server-side enforcement, README §6).
-  const mapRows = (await db.execute(
-    sql`select persona_id from angle_personas where angle_id = ${data.angleId}`,
-  )) as unknown as { persona_id: string }[];
-  const allowed = new Set(mapRows.map((r) => r.persona_id));
-  if (!data.personaIds.every((p) => allowed.has(p)))
-    return { ok: false, error: "A selected persona isn't mapped to that angle." };
+  // Persona and Angle are chosen independently (2026-09-08) — the old
+  // "persona must be mapped to the angle" check is gone with the mapping.
 
   const [created] = await db
     .insert(creatives)
