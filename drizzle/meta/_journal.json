@@ -148,6 +148,13 @@
       "when": 1787060000000,
       "tag": "0020_product_usp_on_script",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787070000000,
+      "tag": "0021_persona_angle_fitness_parenting",
+      "breakpoints": true
     }
   ]
 }
