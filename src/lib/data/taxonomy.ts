@@ -93,6 +93,13 @@ async function loadTaxonomy() {
     (anglePersonaMap[m.angleId] ??= []).push(m.personaId);
   }
 
+  // personaId -> [angleId]. The forms ask Persona first and then narrow the
+  // angle list to it, so they need the map in this direction too.
+  const personaAngleMap: Record<string, string[]> = {};
+  for (const m of mapRows) {
+    (personaAngleMap[m.personaId] ??= []).push(m.angleId);
+  }
+
   const tagGroups: TagGroupOption[] = groupRows.map((g) => ({
     id: g.id,
     key: g.key,
@@ -110,6 +117,7 @@ async function loadTaxonomy() {
     hooks: hookRows.map((h) => ({ id: h.id, label: h.label })),
     tagGroups,
     anglePersonaMap,
+    personaAngleMap,
   };
 }
 

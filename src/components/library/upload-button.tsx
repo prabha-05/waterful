@@ -161,13 +161,23 @@ function UploadModal({
   const isCarousel = selectedType?.label === "Carousel";
   const formatReady = fromScript ? !!scriptFormat?.typeId : !!typeId && !!subtypeId;
 
-  const personaOptions = useMemo(
-    () =>
-      taxonomy.personas.filter((p) =>
-        (taxonomy.anglePersonaMap[angleId] ?? []).includes(p.id),
-      ),
-    [taxonomy, angleId],
-  );
+  // Persona first, then the angles mapped to it (team model, Persona → Angle).
+  const angleOptions = useMemo(() => {
+    if (!personaIds.length) return [];
+    const allowed = new Set(personaIds.flatMap((id) => taxonomy.personaAngleMap[id] ?? []));
+    return taxonomy.angles.filter((a) => allowed.has(a.id));
+  }, [taxonomy, personaIds]);
+
+  const togglePersona = (pid: string) => {
+    const next = personaIds.includes(pid)
+      ? personaIds.filter((x) => x !== pid)
+      : [...personaIds, pid];
+    setPersonaIds(next);
+    // Don't leave an angle selected that no chosen persona maps to.
+    if (angleId && !next.some((id) => (taxonomy.personaAngleMap[id] ?? []).includes(angleId))) {
+      setAngleId("");
+    }
+  };
 
   const valid =
     formatReady &&
@@ -365,44 +375,40 @@ function UploadModal({
           </div>
 
           <div className={fromScript ? "hidden" : "contents"}>
-            <Field label="Angle" required>
-              <Select value={angleId} onChange={(e) => { setAngleId(e.target.value); setPersonaIds([]); }}>
-                <option value="">Select…</option>
-                {taxonomy.angles.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-              </Select>
-            </Field>
-          </div>
-
-          <div className={fromScript ? "hidden" : "contents"}>
           <div className={script?.personaIds?.length ? "hidden" : "contents"}>
-          <Field label="Persona (mapped to the angle)" required>
-            {!angleId ? (
-              <p className="text-xs text-muted">Choose an angle first.</p>
-            ) : personaOptions.length === 0 ? (
-              <p className="text-xs text-muted">No personas mapped to this angle.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {personaOptions.map((p) => {
-                  const on = personaIds.includes(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() =>
-                        setPersonaIds((cur) => on ? cur.filter((x) => x !== p.id) : [...cur, p.id])
-                      }
-                      className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
-                        on ? "border-brand bg-brand-chip text-brand-deep" : "border-line bg-surface text-ink-3 hover:bg-surface-2"
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+          <Field label="Persona" required>
+            <div className="flex flex-wrap gap-2">
+              {taxonomy.personas.map((p) => {
+                const on = personaIds.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => togglePersona(p.id)}
+                    className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
+                      on ? "border-brand bg-brand-chip text-brand-deep" : "border-line bg-surface text-ink-3 hover:bg-surface-2"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
           </div>
+
+          <Field label="Angle (mapped to the persona)" required>
+            {personaIds.length === 0 ? (
+              <p className="text-xs text-muted">Choose a persona first.</p>
+            ) : angleOptions.length === 0 ? (
+              <p className="text-xs text-muted">No angles mapped to this persona.</p>
+            ) : (
+              <Select value={angleId} onChange={(e) => setAngleId(e.target.value)}>
+                <option value="">Select…</option>
+                {angleOptions.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </Select>
+            )}
+          </Field>
 
           <TagGroupFields
             groups={taxonomy.tagGroups}

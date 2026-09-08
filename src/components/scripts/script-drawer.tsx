@@ -162,16 +162,32 @@ export function ScriptDrawer({
   // dimension the script form asks for. Shown as a hint, enforced there.
   const missingTags = script?.stage === "draft"
     ? [
-        !angleId ? "Angle" : null,
         personaIds.length === 0 ? "Persona" : null,
+        !angleId ? "Angle" : null,
         ...taxonomy.tagGroups
           .filter((g) => g.showOnScript && !(tagsByGroup[g.id] ?? []).length)
           .map((g) => g.label),
       ].filter(Boolean) as string[]
     : [];
 
-  const allowedIds = new Set(taxonomy.anglePersonaMap[angleId] ?? []);
-  const allowedPersonas = angleId ? taxonomy.personas.filter((p) => allowedIds.has(p.id)) : [];
+  // Persona is picked first, then the angle narrows to what those personas are
+  // mapped to in Master Data · Angle ↔ Persona (team model, Persona → Angle).
+  const allowedAngleIds = new Set(personaIds.flatMap((id) => taxonomy.personaAngleMap[id] ?? []));
+  const allowedAngles = personaIds.length
+    ? taxonomy.angles.filter((a) => allowedAngleIds.has(a.id))
+    : [];
+
+  const togglePersona = (pid: string) => {
+    const next = personaIds.includes(pid)
+      ? personaIds.filter((x) => x !== pid)
+      : [...personaIds, pid];
+    touch(setPersonaIds)(next);
+    // Dropping a persona can orphan the chosen angle — clear it rather than
+    // saving an angle the personas are no longer mapped to.
+    if (angleId && !next.some((id) => (taxonomy.personaAngleMap[id] ?? []).includes(angleId))) {
+      setAngleId("");
+    }
+  };
 
   const download = () => {
     if (!script) return;
@@ -287,66 +303,58 @@ export function ScriptDrawer({
                 </h3>
 
                 <div className="mt-3 flex flex-col gap-3">
-                  <label className="flex flex-col gap-1.5">
-                    <span className="text-[13px] font-medium text-ink-2">
-                      Angle <span className="text-red">*</span>
-                    </span>
-                    <Select
-                      value={angleId}
-                      disabled={!canEdit}
-                      onChange={(e) => {
-                        touch(setAngleId)(e.target.value);
-                        setPersonaIds([]); // personas are mapped to the angle
-                      }}
-                    >
-                      <option value="">Not decided yet</option>
-                      {taxonomy.angles.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[13px] font-medium text-ink-2">
                       Personas <span className="text-red">*</span>{" "}
-                      <span className="font-normal text-muted">
-                        · mapped to the angle · pick one or more
-                      </span>
+                      <span className="font-normal text-muted">· pick one or more</span>
                     </span>
-                    {!angleId ? (
-                      <p className="text-sm text-muted">Choose an angle first.</p>
-                    ) : allowedPersonas.length === 0 ? (
-                      <p className="text-sm text-muted">No personas mapped to this angle yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {allowedPersonas.map((p) => {
-                          const on = personaIds.includes(p.id);
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              disabled={!canEdit}
-                              aria-pressed={on}
-                              onClick={() =>
-                                touch(setPersonaIds)(
-                                  on ? personaIds.filter((x) => x !== p.id) : [...personaIds, p.id],
-                                )
-                              }
-                              className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
-                                on
-                                  ? "border-brand bg-brand-chip text-brand-deep"
-                                  : "border-line bg-surface text-ink-3 hover:bg-surface-2"
-                              } disabled:opacity-60`}
-                            >
-                              {p.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {taxonomy.personas.map((p) => {
+                        const on = personaIds.includes(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            disabled={!canEdit}
+                            aria-pressed={on}
+                            onClick={() => togglePersona(p.id)}
+                            className={`rounded-[var(--radius-pill)] border px-3 py-1 text-xs font-medium transition ${
+                              on
+                                ? "border-brand bg-brand-chip text-brand-deep"
+                                : "border-line bg-surface text-ink-3 hover:bg-surface-2"
+                            } disabled:opacity-60`}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[13px] font-medium text-ink-2">
+                      Angle <span className="text-red">*</span>{" "}
+                      <span className="font-normal text-muted">· mapped to the persona</span>
+                    </span>
+                    {personaIds.length === 0 ? (
+                      <p className="text-sm text-muted">Choose a persona first.</p>
+                    ) : allowedAngles.length === 0 ? (
+                      <p className="text-sm text-muted">No angles mapped to this persona yet.</p>
+                    ) : (
+                      <Select
+                        value={angleId}
+                        disabled={!canEdit}
+                        onChange={(e) => touch(setAngleId)(e.target.value)}
+                      >
+                        <option value="">Not decided yet</option>
+                        {allowedAngles.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </label>
 
                   <div className="mt-3">
                     <TagGroupFields
