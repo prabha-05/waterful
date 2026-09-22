@@ -36,6 +36,13 @@ const client =
     // `max: 8` still caps our share of the pooler.
     idle_timeout: 600,
     connect_timeout: 10, // fail a stalled connection fast instead of hanging for minutes
+    // 2026-09-22: prod had pool connections wedged mid-query for 10 days —
+    // the pooler stopped answering on a socket that TCP still considered
+    // healthy, and every page that drew that slot spun forever. Recycle every
+    // connection after 10 minutes and probe the socket every 30s so a dead
+    // one is dropped and re-opened instead of held until the next deploy.
+    max_lifetime: 600,
+    keep_alive: 30,
   });
 
 if (process.env.NODE_ENV !== "production") globalForDb._pgClient = client;
