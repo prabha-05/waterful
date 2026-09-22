@@ -182,6 +182,21 @@ function UploadModal({
   function submit() {
     setError(null);
     startTransition(async () => {
+      try {
+        await doSubmit();
+      } catch (e) {
+        // storage-js only *returns* StorageErrors; a network failure, a rejected
+        // session or an aborted request is thrown. Before this, that thrown error
+        // vanished — the button just went back to "Save" with nothing saved and
+        // nothing to tell the person (2026-09-22). Now it is shown and logged.
+        console.error("[upload] failed", e);
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`Upload failed: ${msg}. Nothing was saved — please try again.`);
+      }
+    });
+  }
+
+  async function doSubmit() {
       // Upload bytes straight to Supabase Storage (direct-to-Storage, decisions §9)
       // so large UGC video never hits the Server Action body limit.
       const supabase = createSupabaseBrowserClient();
@@ -235,7 +250,6 @@ function UploadModal({
       }
       router.refresh();
       onClose();
-    });
   }
 
   return (
@@ -397,11 +411,13 @@ function UploadModal({
           />
           </div>
 
-          {error && <p className="text-sm text-red">{error}</p>}
         </div>
       </div>
 
+      {/* Error sits in the sticky footer, not at the bottom of a long scroll area,
+          so it is seen without scrolling. */}
       <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+        {error && <p className="mr-auto text-sm text-red">{error}</p>}
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button disabled={!valid || pending} onClick={submit}>
           {pending ? "Saving…" : "Save to Library"}
