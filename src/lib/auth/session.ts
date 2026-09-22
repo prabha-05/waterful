@@ -40,6 +40,18 @@ export function clearUserCache(email?: string) {
  * non-archived role mapping proves WHETHER you're in and WHAT you can do.
  * Returns null when there is no authenticated Supabase user at all.
  */
+// Same cap the proxy puts on Supabase Auth. A local JWT verify is <5ms; only a
+// degraded auth service ever gets near this, and then we'd rather bounce to
+// /login than freeze every page behind it (2026-09-22 audit).
+const AUTH_TIMEOUT_MS = 2500;
+function withAuthTimeout<T>(p: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("auth-timeout")), AUTH_TIMEOUT_MS);
+  });
+  return Promise.race([Promise.resolve(p), timeout]).finally(() => clearTimeout(timer));
+}
+
 export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   const supabase = await createSupabaseServerClient();
 
@@ -52,7 +64,7 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
 
   try {
     const { data } = await timed("session.getClaims", () =>
-      supabase.auth.getClaims(),
+      withAuthTimeout(supabase.auth.getClaims()),
     );
     const claims = data?.claims as Record<string, unknown> | undefined;
     if (claims?.email) {
@@ -66,9 +78,12 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
   }
 
   if (!email) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+    try {
+      ({ data: { user } } = await withAuthTimeout(supabase.auth.getUser()));
+    } catch {
+      // Auth didn't answer in time — treat as logged out rather than hang the page.
+    }
     if (user?.email) {
       email = user.email.toLowerCase();
       sub =
