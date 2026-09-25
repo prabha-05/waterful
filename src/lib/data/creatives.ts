@@ -282,46 +282,48 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
     where aa.meta_ad_id = ${adId}`;
   if (!aa) return null;
 
-  const [life] = await sqlClient`
-    select coalesce(sum(spend),0) spend, coalesce(sum(revenue),0) revenue,
-           coalesce(sum(impressions),0) impressions, coalesce(sum(clicks),0) clicks,
-           coalesce(sum(conversions),0) conversions
-    from ad_metrics where ad_id = ${adId}`;
-  const ranges = await sqlClient`
-    select range, reach, frequency from ad_range_metrics where ad_id = ${adId}`;
-  // Daily rows the ad actually delivered (Meta returns no row for zero-delivery
-  // days), newest first. We pull a long history so the ad view can re-window to
-  // 7 / 15 / 30 days or lifetime client-side; for a paused ad these are the days
-  // it was active, not a flat calendar tail.
-  const daily = await sqlClient`
-    select * from ad_metrics where ad_id = ${adId} order by as_of_date desc limit 400`;
-  const log = await sqlClient`
-    select l.text, l.created_at, u.name as author
-    from ad_decision_log l join users u on u.id = l.author_id
-    where l.ad_id = ${adId} order by l.created_at desc`;
-  // Demographics are stored per day; the ad frame wants lifetime totals, so
-  // sum them here. `reach` is de-duplicated per row and is deliberately maxed
-  // rather than summed — a sum would count the same person once per day.
-  const demographics = await sqlClient`
-    select dimension, segment,
-           sum(spend) as spend, sum(revenue) as revenue,
-           sum(impressions) as impressions, sum(clicks) as clicks,
-           sum(conversions) as conversions, max(reach) as reach
-    from ad_demographic_metrics where ad_id = ${adId}
-    group by dimension, segment
-    order by sum(spend) desc`;
-
-  // Shopify attribution is optional — the table only exists where the store
-  // connection is configured, so probe before querying it.
-  const [{ present }] = await sqlClient<{ present: boolean }[]>`
-    select to_regclass('public.shopify_ad_revenue') is not null as present`;
-  const regionRevenue = present
-    ? await sqlClient`
-        select region, sum(revenue) as revenue, sum(orders)::int as orders
-        from shopify_ad_revenue where ad_id = ${adId}
-        group by region having sum(revenue) > 0
-        order by sum(revenue) desc`
-    : [];
+  // The remaining reads don't depend on each other, so they go in one round of
+  // parallel queries rather than seven sequential round trips to Mumbai. On a
+  // ~40ms link that is the difference between ~0.3s and ~40ms of waiting.
+  const [life_, ranges, daily, log, demographics, regionRevenue] = await Promise.all([
+    sqlClient`
+      select coalesce(sum(spend),0) spend, coalesce(sum(revenue),0) revenue,
+             coalesce(sum(impressions),0) impressions, coalesce(sum(clicks),0) clicks,
+             coalesce(sum(conversions),0) conversions
+      from ad_metrics where ad_id = ${adId}`,
+    sqlClient`
+      select range, reach, frequency from ad_range_metrics where ad_id = ${adId}`,
+    // Daily rows the ad actually delivered (Meta returns no row for zero-delivery
+    // days), newest first. We pull a long history so the ad view can re-window to
+    // 7 / 15 / 30 days or lifetime client-side; for a paused ad these are the days
+    // it was active, not a flat calendar tail.
+    sqlClient`
+      select * from ad_metrics where ad_id = ${adId} order by as_of_date desc limit 400`,
+    sqlClient`
+      select l.text, l.created_at, u.name as author
+      from ad_decision_log l join users u on u.id = l.author_id
+      where l.ad_id = ${adId} order by l.created_at desc`,
+    // Demographics are stored per day; the ad frame wants lifetime totals, so
+    // sum them here. `reach` is de-duplicated per row and is deliberately maxed
+    // rather than summed — a sum would count the same person once per day.
+    sqlClient`
+      select dimension, segment,
+             sum(spend) as spend, sum(revenue) as revenue,
+             sum(impressions) as impressions, sum(clicks) as clicks,
+             sum(conversions) as conversions, max(reach) as reach
+      from ad_demographic_metrics where ad_id = ${adId}
+      group by dimension, segment
+      order by sum(spend) desc`,
+    // Shopify attribution is optional — the table only exists where the store
+    // connection is configured, so the query no-ops to an empty set where it
+    // doesn't (cheaper than a separate to_regclass probe round trip).
+    sqlClient`
+      select region, sum(revenue) as revenue, sum(orders)::int as orders
+      from shopify_ad_revenue where ad_id = ${adId}
+      group by region having sum(revenue) > 0
+      order by sum(revenue) desc`.catch(() => []),
+  ]);
+  const [life] = life_;
 
   const rng = (k: string) => ranges.find((r) => r.range === k);
   const lifetimeReach = rng("lifetime");

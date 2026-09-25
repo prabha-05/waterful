@@ -14,10 +14,16 @@ import { updateSession } from "@/lib/supabase/middleware";
  * primary app-layer check — with Supabase RLS as the backstop (decisions §3–§4).
  */
 
-// Routes reachable without a session.
-const PUBLIC_PATHS = ["/login", "/auth"];
+// Routes reachable without a session. /api/health must be here: a health check
+// that needs a session can't tell "the app is wedged" from "you're logged out".
+const PUBLIC_PATHS = ["/login", "/auth", "/api/health"];
 
 export async function proxy(request: NextRequest) {
+  const { pathname: rawPath } = request.nextUrl;
+  // Skip the session refresh entirely for the health probe — it must answer
+  // even when Supabase Auth is the thing that's down.
+  if (rawPath === "/api/health") return NextResponse.next();
+
   const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
