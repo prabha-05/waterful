@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "25mb",
     },
+    // Keep pages the user just visited in the browser for 30s, so going back to
+    // Library/Dashboard from an ad or a drawer is instant instead of a full server
+    // re-render. Every save already calls router.refresh()/revalidatePath, which
+    // clears this cache, so edits still show up immediately.
+    staleTimes: {
+      dynamic: 30,
+    },
   },
 };
 
