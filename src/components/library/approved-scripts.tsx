@@ -26,15 +26,42 @@ export function ApprovedScripts({
   canUpload: boolean;
 }) {
   const [reading, setReading] = useState<ApprovedScript | null>(null);
+  // Collapsed by default: with 15+ approved scripts the list pushed the
+  // creatives themselves far below the fold. The header still shows the count,
+  // so nothing waiting is hidden from view — it just doesn't take the page.
+  const [open, setOpen] = useState(false);
   if (scripts.length === 0) return null;
 
   return (
     <section className="rounded-[var(--radius-card)] border border-line bg-surface">
-      <div className="flex items-baseline justify-between gap-2 border-b border-line px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`flex w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-surface-2 ${
+          open ? "border-b border-line" : ""
+        }`}
+      >
         <h3 className="text-sm font-semibold text-ink">Approved scripts waiting on you</h3>
-        <span className="text-[11px] text-muted">{scripts.length} ready to shoot</span>
-      </div>
+        <span className="flex items-center gap-2 text-[11px] text-muted">
+          {scripts.length} ready to shoot
+          <span className="text-xs font-medium text-brand">{open ? "Hide" : "Show"}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            className={`text-brand transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </span>
+      </button>
 
+      {open && (
       <div className="flex flex-col divide-y divide-line-2">
         {scripts.map((s) => (
           <div key={s.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -89,6 +116,7 @@ export function ApprovedScripts({
           </div>
         ))}
       </div>
+      )}
 
       {reading && (
         <ReadScript
