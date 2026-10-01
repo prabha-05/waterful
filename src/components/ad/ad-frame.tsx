@@ -260,12 +260,14 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
             )}
           </section>
 
+          {/* Always lifetime, not the chart window: a landing leak needs volume
+              to mean anything, and 7 days of a small ad is a handful of taps. */}
           <LandingPanel
             landing={data.landing}
-            linkClicks={sumK(cur, "linkClicks")}
-            landingPageViews={sumK(cur, "landingPageViews")}
-            conversions={sumK(cur, "conversions")}
-            winLabel={winLabel}
+            linkClicks={sumK(data.daily, "linkClicks")}
+            landingPageViews={sumK(data.daily, "landingPageViews")}
+            conversions={sumK(data.daily, "conversions")}
+            winLabel="Lifetime"
             canRecheck={perms.sync}
           />
 
