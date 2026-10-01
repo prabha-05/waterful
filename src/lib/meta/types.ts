@@ -22,6 +22,8 @@ export type MetaActivation = {
   budgetType: string; // e.g. "CBO" / "Ad set budget"
   dailyBudget: number;
   optimization: string;
+  /** Where the ad sends people, read from its creative. Null if Meta has none. */
+  landingUrl: string | null;
 };
 
 export type MetaDaily = {
@@ -30,7 +32,9 @@ export type MetaDaily = {
   revenue: number;
   impressions: number;
   reach: number; // daily unique — stored per day, NEVER summed for lifetime (§6 G1)
-  clicks: number;
+  clicks: number; // Meta "clicks (all)" — includes likes, profile taps, "see more"
+  linkClicks: number; // taps headed to the site
+  landingPageViews: number; // taps the landing page actually loaded for
   conversions: number;
   thumbstop: number | null; // video-only
   hold: number | null; // video-only

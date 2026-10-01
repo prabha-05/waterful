@@ -78,6 +78,21 @@ export type ReportData = {
   region: BreakdownRow[];
   /** True when Shopify attribution is available (table exists and has rows). */
   hasShopify: boolean;
+  /** One row per landing page (query string stripped), worst leak first. */
+  landing: LandingRow[];
+};
+
+export type LandingRow = {
+  url: string;
+  ads: number;
+  spend: number;
+  revenue: number;
+  purchases: number;
+  linkClicks: number;
+  landingPageViews: number;
+  landedPct: number | null;
+  lost: number;
+  speed: { score: number | null; lcpMs: number | null; error: string | null; checkedAt: string } | null;
 };
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -113,7 +128,7 @@ function toBreakdown(rows: Record<string, unknown>[]): BreakdownRow[] {
 export async function getReport(range: ReportRange): Promise<ReportData> {
   const { from, to } = range;
 
-  const [totalsRow, adRows, ageRows, genderRows, ageGenderRows, regionRows, shopRow] =
+  const [totalsRow, adRows, ageRows, genderRows, ageGenderRows, regionRows, shopRow, landingRows] =
     await timed("getReport", () =>
       Promise.all([
         sqlClient`
@@ -175,8 +190,58 @@ export async function getReport(range: ReportRange): Promise<ReportData> {
         sqlClient`
           select coalesce(sum(revenue),0) revenue, coalesce(sum(orders),0) orders
           from shopify_ad_revenue where as_of_date between ${from} and ${to}`,
+
+        // Landing pages: the same page reached through different utm tags is one
+        // page, so group on the URL without its query string or trailing slash —
+        // the same key lib/pagespeed stores speed results under.
+        sqlClient`
+          with pages as (
+            select aa.meta_ad_id,
+                   regexp_replace(split_part(aa.landing_url, '?', 1), '/$', '') as url
+            from ad_activations aa
+            where aa.landing_url is not null
+          )
+          select p.url,
+                 count(distinct p.meta_ad_id)::int ads,
+                 coalesce(sum(m.spend),0) spend, coalesce(sum(m.revenue),0) revenue,
+                 coalesce(sum(m.conversions),0) conversions,
+                 coalesce(sum(m.link_clicks),0) link_clicks,
+                 coalesce(sum(m.landing_page_views),0) landing_page_views,
+                 sp.score, sp.lcp_ms, sp.error, sp.checked_at
+          from pages p
+          join ad_metrics m on m.ad_id = p.meta_ad_id
+                           and m.as_of_date between ${from} and ${to}
+          left join landing_page_speed sp on sp.url = p.url
+          group by p.url, sp.score, sp.lcp_ms, sp.error, sp.checked_at`.catch(() => []),
       ]),
     );
+
+  const landing: LandingRow[] = (landingRows as Record<string, unknown>[])
+    .map((r) => {
+      const linkClicks = n(r.link_clicks);
+      const landingPageViews = n(r.landing_page_views);
+      return {
+        url: String(r.url),
+        ads: n(r.ads),
+        spend: n(r.spend),
+        revenue: n(r.revenue),
+        purchases: n(r.conversions),
+        linkClicks,
+        landingPageViews,
+        landedPct: linkClicks > 0 ? Math.min(100, (landingPageViews / linkClicks) * 100) : null,
+        lost: Math.max(0, linkClicks - landingPageViews),
+        speed:
+          r.checked_at === null || r.checked_at === undefined
+            ? null
+            : {
+                score: r.score === null ? null : n(r.score),
+                lcpMs: r.lcp_ms === null ? null : n(r.lcp_ms),
+                error: (r.error as string | null) ?? null,
+                checkedAt: String(r.checked_at),
+              },
+      };
+    })
+    .sort((a, b) => b.lost - a.lost || b.spend - a.spend);
 
   const t = totalsRow[0] as Record<string, unknown>;
   const spend = n(t.spend);
@@ -237,6 +302,7 @@ export async function getReport(range: ReportRange): Promise<ReportData> {
     ageGender: toBreakdown(ageGenderRows as Record<string, unknown>[]),
     region: toBreakdown(regionRows as Record<string, unknown>[]),
     hasShopify: n((shopRow[0] as Record<string, unknown>)?.orders) > 0,
+    landing,
   };
 }
 

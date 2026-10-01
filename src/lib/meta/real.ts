@@ -94,6 +94,34 @@ function purchase(arr?: ActionItem[]): number {
   return 0;
 }
 
+/** First matching action count — used for landing page views. */
+function actionCount(arr: ActionItem[] | undefined, types: string[]): number {
+  if (!arr) return 0;
+  for (const t of types) {
+    const hit = arr.find((a) => a.action_type === t);
+    if (hit) return Number(hit.value) || 0;
+  }
+  return 0;
+}
+
+/**
+ * The URL an ad sends people to. Meta keeps it in a different place per ad
+ * format: a link ad's link_data, a video ad's call-to-action, or a dynamic
+ * creative's asset feed.
+ */
+function landingUrlOf(creative: any): string | null {
+  const oss = creative?.object_story_spec ?? {};
+  const url =
+    oss.link_data?.link ??
+    oss.link_data?.call_to_action?.value?.link ??
+    oss.video_data?.call_to_action?.value?.link ??
+    oss.template_data?.link ??
+    creative?.asset_feed_spec?.link_urls?.[0]?.website_url ??
+    creative?.link_url ??
+    null;
+  return typeof url === "string" && url.startsWith("http") ? url : null;
+}
+
 function videoValue(arr?: ActionItem[]): number {
   if (!arr || arr.length === 0) return 0;
   // video_play_actions / thruplay arrays carry a single 'video_view' entry.
@@ -163,7 +191,7 @@ export async function fetchMetaData(
   const [ad, rows, ranges, agRows, regionRows] = await Promise.all([
     graph(adId, {
       fields:
-        "id,effective_status,campaign{id,name,objective,daily_budget},adset{id,name,optimization_goal,daily_budget,targeting{publisher_platforms}}",
+        "id,effective_status,campaign{id,name,objective,daily_budget},adset{id,name,optimization_goal,daily_budget,targeting{publisher_platforms}},creative{object_story_spec,asset_feed_spec,link_url}",
     }),
     graphAll(`${adId}/insights`, dailyParams),
     Promise.all([
@@ -202,6 +230,7 @@ export async function fetchMetaData(
     budgetType: campaignDaily > 0 ? "CBO" : "Ad set budget",
     dailyBudget: (campaignDaily || adsetDaily) / 100, // minor units → currency
     optimization: ad?.adset?.optimization_goal ?? "",
+    landingUrl: landingUrlOf(ad?.creative),
   };
 
   const daily: MetaDaily[] = rows.map((r) => {
@@ -215,6 +244,8 @@ export async function fetchMetaData(
       impressions,
       reach: Number(r.reach) || 0,
       clicks: Number(r.clicks) || 0,
+      linkClicks: Number(r.inline_link_clicks) || 0,
+      landingPageViews: actionCount(r.actions, ["landing_page_view", "omni_landing_page_view"]),
       conversions: purchase(r.actions),
       thumbstop:
         opts.isVideo && impressions > 0

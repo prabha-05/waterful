@@ -1,4 +1,5 @@
 import "server-only";
+import { pageKey, pagespeedConfigured } from "@/lib/pagespeed";
 import { sqlClient } from "@/lib/db";
 import { creativeScore } from "@/lib/score";
 import { timed } from "@/lib/perf";
@@ -244,10 +245,27 @@ export type AdFrameData = {
     impressions: number;
     reach: number;
     clicks: number;
+    linkClicks: number;
+    landingPageViews: number;
     conversions: number;
     thumbstop: number | null;
     hold: number | null;
   }[];
+  /** Where the ad lands and how fast that page is (see lib/pagespeed). */
+  landing: {
+    url: string | null;
+    speed: {
+      checkedAt: string;
+      score: number | null;
+      lcpMs: number | null;
+      fcpMs: number | null;
+      tbtMs: number | null;
+      cls: number | null;
+      fieldLcpMs: number | null;
+      error: string | null;
+    } | null;
+    speedConfigured: boolean;
+  };
   range: {
     last7: { reach: number; frequency: number };
     prior7: { reach: number; frequency: number };
@@ -325,6 +343,12 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
   ]);
   const [life] = life_;
 
+  // Speed result for this ad's landing page (keyed without the query string).
+  const landingUrl: string | null = aa.landing_url ?? null;
+  const [speedRow] = landingUrl
+    ? await sqlClient`select * from landing_page_speed where url = ${pageKey(landingUrl)}`.catch(() => [])
+    : [];
+
   const rng = (k: string) => ranges.find((r) => r.range === k);
   const lifetimeReach = rng("lifetime");
 
@@ -355,6 +379,8 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
         impressions: Number(d.impressions),
         reach: Number(d.reach),
         clicks: Number(d.clicks),
+        linkClicks: Number(d.link_clicks ?? 0),
+        landingPageViews: Number(d.landing_page_views ?? 0),
         conversions: Number(d.conversions),
         thumbstop: d.thumbstop === null ? null : Number(d.thumbstop),
         hold: d.hold === null ? null : Number(d.hold),
@@ -368,6 +394,22 @@ export async function getAdFrame(adId: string): Promise<AdFrameData | null> {
         reach: Number(rng("prior_7")?.reach ?? 0),
         frequency: Number(rng("prior_7")?.frequency ?? 0),
       },
+    },
+    landing: {
+      url: landingUrl,
+      speed: speedRow
+        ? {
+            checkedAt: String(speedRow.checked_at),
+            score: speedRow.score ?? null,
+            lcpMs: speedRow.lcp_ms ?? null,
+            fcpMs: speedRow.fcp_ms ?? null,
+            tbtMs: speedRow.tbt_ms ?? null,
+            cls: speedRow.cls === null || speedRow.cls === undefined ? null : Number(speedRow.cls),
+            fieldLcpMs: speedRow.field_lcp_ms ?? null,
+            error: speedRow.error ?? null,
+          }
+        : null,
+      speedConfigured: pagespeedConfigured(),
     },
     regionRevenue: regionRevenue.map((r) => ({
       region: String(r.region),

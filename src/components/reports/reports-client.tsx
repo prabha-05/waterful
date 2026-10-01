@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { BreakdownRow, ReportData } from "@/lib/data/reports";
+import type { BreakdownRow, LandingRow, ReportData } from "@/lib/data/reports";
 import { formatInt, formatRoas } from "@/lib/format";
 import { useFormat } from "@/components/providers/settings-provider";
 
@@ -109,6 +109,8 @@ export function ReportsClient({
       ) : (
         <>
           <AdTable data={data} />
+
+          <LandingTable rows={data.landing} />
 
           <section className="flex flex-col gap-5">
             <div>
@@ -344,5 +346,131 @@ function Breakdown({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Landing pages — where ads send people, how many never get the page, how fast
+// ---------------------------------------------------------------------------
+const LP_GRID =
+  "grid-cols-[minmax(200px,1fr)_44px_96px_84px_84px_70px_84px_64px_64px]";
+
+function LandingTable({ rows }: { rows: LandingRow[] }) {
+  const fmt = useFormat();
+  const withFunnel = rows.filter((r) => r.linkClicks > 0);
+  const totalLost = withFunnel.reduce((s, r) => s + r.lost, 0);
+  const totalLink = withFunnel.reduce((s, r) => s + r.linkClicks, 0);
+
+  const pathOf = (url: string) => {
+    try {
+      const u = new URL(url);
+      return `${u.hostname}${u.pathname}`;
+    } catch {
+      return url;
+    }
+  };
+  const landedTone = (p: number | null) =>
+    p === null ? "text-muted" : p >= 85 ? "text-green" : p >= 70 ? "text-amber" : "text-red";
+  const scoreTone = (s: number | null) =>
+    s === null ? "text-muted" : s >= 90 ? "text-green" : s >= 50 ? "text-amber" : "text-red";
+  const lcpTone = (ms: number | null) =>
+    ms === null ? "text-muted" : ms <= 2500 ? "text-green" : ms <= 4000 ? "text-amber" : "text-red";
+
+  return (
+    <section>
+      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-ink">
+            Landing pages <span className="font-normal text-muted">· {rows.length}</span>
+          </h3>
+          <p className="text-[11px] text-muted">
+            {withFunnel.length === 0
+              ? "Link clicks and page loads fill in from the next Meta sync."
+              : `${formatInt(totalLost)} of ${formatInt(totalLink)} link clicks never got the page (${(
+                  (totalLost / totalLink) *
+                  100
+                ).toFixed(0)}%). 10–25% is normal on mobile; worst leak first.`}
+          </p>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="rounded-[var(--radius-control)] border border-line bg-surface px-4 py-6 text-center text-sm text-muted">
+          No landing pages known yet — they&apos;re read from Meta on the next sync.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-[var(--radius-control)] border border-line bg-surface">
+          <div className="min-w-[900px]">
+            <div
+              className={`grid items-center gap-3 border-b border-line-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted ${LP_GRID}`}
+            >
+              <span>Page</span>
+              <span className="text-right">Ads</span>
+              <span className="text-right">Spend</span>
+              <span className="text-right">Link clicks</span>
+              <span className="text-right">Loaded</span>
+              <span className="text-right">Landed</span>
+              <span className="text-right">Never landed</span>
+              <span className="text-right">Speed</span>
+              <span className="text-right">Load</span>
+            </div>
+            {rows.map((r) => (
+              <div
+                key={r.url}
+                className={`grid items-center gap-3 border-b border-line-2 px-4 py-2.5 text-sm last:border-0 ${LP_GRID}`}
+              >
+                <span className="min-w-0">
+                  <a
+                    href={r.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block truncate font-medium text-ink hover:text-brand hover:underline"
+                    title={r.url}
+                  >
+                    {pathOf(r.url)}
+                  </a>
+                  <span className="block text-[11px] text-muted">
+                    {r.purchases > 0 && r.landingPageViews > 0
+                      ? `${((r.purchases / r.landingPageViews) * 100).toFixed(1)}% of landers bought · `
+                      : ""}
+                    <a
+                      href={`https://pagespeed.web.dev/analysis?url=${encodeURIComponent(r.url)}&form_factor=mobile`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand hover:underline"
+                    >
+                      speed report ↗
+                    </a>
+                  </span>
+                </span>
+                <span className="text-right font-mono text-ink-3">{r.ads}</span>
+                <span className="text-right font-mono text-ink">{fmt(r.spend)}</span>
+                <span className="text-right font-mono text-ink-3">
+                  {r.linkClicks > 0 ? formatInt(r.linkClicks) : "—"}
+                </span>
+                <span className="text-right font-mono text-ink-3">
+                  {r.linkClicks > 0 ? formatInt(r.landingPageViews) : "—"}
+                </span>
+                <span className={`text-right font-mono ${landedTone(r.landedPct)}`}>
+                  {r.landedPct === null ? "—" : `${r.landedPct.toFixed(0)}%`}
+                </span>
+                <span className={`text-right font-mono ${landedTone(r.landedPct)}`}>
+                  {r.linkClicks > 0 ? formatInt(r.lost) : "—"}
+                </span>
+                <span
+                  className={`text-right font-mono ${scoreTone(r.speed?.error ? null : (r.speed?.score ?? null))}`}
+                  title={r.speed?.error ?? undefined}
+                >
+                  {r.speed && !r.speed.error && r.speed.score !== null ? r.speed.score : "—"}
+                </span>
+                <span className={`text-right font-mono ${lcpTone(r.speed?.error ? null : (r.speed?.lcpMs ?? null))}`}>
+                  {r.speed && !r.speed.error && r.speed.lcpMs !== null ? `${(r.speed.lcpMs / 1000).toFixed(1)}s` : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

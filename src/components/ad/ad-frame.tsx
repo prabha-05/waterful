@@ -7,6 +7,7 @@ import type { Permissions } from "@/lib/auth/permissions";
 import { lifetimeDerived, recommendation } from "@/lib/ad-metrics";
 import { formatInt, formatRoas } from "@/lib/format";
 import { addDecisionLog, unlinkAd } from "@/app/actions/creatives";
+import { recheckLandingSpeed } from "@/app/actions/meta-sync";
 import { Button, Chip } from "@/components/ui/primitives";
 import { useDate, useFormat } from "@/components/providers/settings-provider";
 
@@ -31,7 +32,7 @@ const shiftDays = (iso: string, by: number) => {
 };
 const zeroDay = (asOfDate: string): Daily => ({
   asOfDate, spend: 0, revenue: 0, impressions: 0, reach: 0,
-  clicks: 0, conversions: 0, thumbstop: null, hold: null,
+  clicks: 0, linkClicks: 0, landingPageViews: 0, conversions: 0, thumbstop: null, hold: null,
 });
 
 /**
@@ -258,6 +259,15 @@ export function AdFrame({ data, perms }: { data: AdFrameData; perms: Permissions
               </p>
             )}
           </section>
+
+          <LandingPanel
+            landing={data.landing}
+            linkClicks={sumK(cur, "linkClicks")}
+            landingPageViews={sumK(cur, "landingPageViews")}
+            conversions={sumK(cur, "conversions")}
+            winLabel={winLabel}
+            canRecheck={perms.sync}
+          />
 
           {data.demographics.length > 0 && (
             <AudienceBreakdown
@@ -680,5 +690,201 @@ function DecisionLog({
         )}
       </div>
     </aside>
+  );
+}
+
+// --- Landing page ------------------------------------------------------------
+
+type Tone = "good" | "ok" | "bad" | "none";
+const TONE_TEXT: Record<Tone, string> = {
+  good: "text-green",
+  ok: "text-amber",
+  bad: "text-red",
+  none: "text-muted",
+};
+const TONE_BG: Record<Tone, string> = {
+  good: "bg-green-bg text-green",
+  ok: "bg-amber-bg text-amber",
+  bad: "bg-red-bg text-red",
+  none: "bg-surface-2 text-muted",
+};
+
+/** Share of link clicks the page loaded for. 10–25% loss is normal on mobile. */
+const landedTone = (pct: number | null): Tone =>
+  pct === null ? "none" : pct >= 85 ? "good" : pct >= 70 ? "ok" : "bad";
+/** Google's own bands for the Lighthouse performance score and LCP. */
+const scoreTone = (s: number | null): Tone =>
+  s === null ? "none" : s >= 90 ? "good" : s >= 50 ? "ok" : "bad";
+const lcpTone = (ms: number | null): Tone =>
+  ms === null ? "none" : ms <= 2500 ? "good" : ms <= 4000 ? "ok" : "bad";
+const secs = (ms: number | null) => (ms === null ? "—" : `${(ms / 1000).toFixed(1)}s`);
+
+function LandingPanel({
+  landing,
+  linkClicks,
+  landingPageViews,
+  conversions,
+  winLabel,
+  canRecheck,
+}: {
+  landing: AdFrameData["landing"];
+  linkClicks: number;
+  landingPageViews: number;
+  conversions: number;
+  winLabel: string;
+  canRecheck: boolean;
+}) {
+  const router = useRouter();
+  const fmtDate = useDate();
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  const hasFunnel = linkClicks > 0;
+  // Meta can attribute a few more views than link clicks on tiny numbers;
+  // cap at 100% so the "never landed" figure never goes negative.
+  const landedPct = hasFunnel ? Math.min(100, (landingPageViews / linkClicks) * 100) : null;
+  const lost = Math.max(0, linkClicks - landingPageViews);
+  const convPerView = landingPageViews > 0 ? (conversions / landingPageViews) * 100 : null;
+  const sp = landing.speed;
+
+  const recheck = () => {
+    if (!landing.url) return;
+    setErr(null);
+    start(async () => {
+      const r = await recheckLandingSpeed(landing.url!);
+      if (!r.ok) setErr(r.error ?? "Check failed");
+      router.refresh();
+    });
+  };
+
+  let path = landing.url ?? "";
+  try {
+    if (landing.url) {
+      const u = new URL(landing.url);
+      path = `${u.hostname}${u.pathname}`;
+    }
+  } catch {}
+
+  return (
+    <section className="rounded-[var(--radius-card)] border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-sm font-semibold text-ink">Landing page</h3>
+        <span className="text-[11px] text-muted">{winLabel}</span>
+      </div>
+
+      {landing.url ? (
+        <a
+          href={landing.url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 block truncate text-sm text-brand hover:underline"
+          title={landing.url}
+        >
+          {path} ↗
+        </a>
+      ) : (
+        <p className="mt-1 text-sm text-muted">Not known yet — it&apos;s read from Meta on the next sync.</p>
+      )}
+
+      {/* Click → page load funnel */}
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Link clicks" value={hasFunnel ? formatInt(linkClicks) : "—"} />
+        <Stat label="Page loaded" value={hasFunnel ? formatInt(landingPageViews) : "—"} />
+        <Stat
+          label="Landed"
+          value={landedPct === null ? "—" : `${landedPct.toFixed(0)}%`}
+          tone={landedTone(landedPct)}
+        />
+        <Stat
+          label="Never landed"
+          value={hasFunnel ? formatInt(lost) : "—"}
+          tone={landedTone(landedPct)}
+        />
+      </div>
+      {hasFunnel ? (
+        <p className="mt-2 text-[11px] text-muted">
+          {landedPct! >= 85
+            ? "Healthy — most people who tap get the page."
+            : landedPct! >= 70
+              ? "Some leak. 10–25% loss is normal on mobile; above that the page is usually too slow."
+              : "Big leak — a lot of people tap and give up before the page loads. Check speed below."}
+          {convPerView !== null && ` · ${convPerView.toFixed(1)}% of people who landed bought.`}
+        </p>
+      ) : (
+        <p className="mt-2 text-[11px] text-muted">
+          No link-click data for this period yet — it fills in from the next Meta sync.
+        </p>
+      )}
+
+      {/* PageSpeed */}
+      <div className="mt-4 border-t border-line-2 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[13px] font-medium text-ink-2">Mobile page speed</span>
+          {canRecheck && landing.url && landing.speedConfigured && (
+            <button
+              type="button"
+              onClick={recheck}
+              disabled={pending}
+              className="text-xs font-medium text-brand hover:underline disabled:opacity-50"
+            >
+              {pending ? "Checking… (up to 40s)" : "Re-check now"}
+            </button>
+          )}
+        </div>
+
+        {!landing.speedConfigured ? (
+          <p className="mt-1 text-[11px] text-muted">
+            Not set up yet — needs a free Google PageSpeed API key (PAGESPEED_API_KEY on Render).
+          </p>
+        ) : !sp ? (
+          <p className="mt-1 text-[11px] text-muted">Not checked yet — runs with the next sync.</p>
+        ) : sp.error ? (
+          <p className="mt-1 text-[11px] text-red">Last check failed: {sp.error}</p>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className={`rounded-[var(--radius-control)] p-3 ${TONE_BG[scoreTone(sp.score)]}`}>
+                <div className="text-[10px] uppercase tracking-wide opacity-80">Score</div>
+                <div className="font-mono text-lg font-bold">
+                  {sp.score ?? "—"}
+                  <span className="text-xs font-normal">/100</span>
+                </div>
+              </div>
+              <Stat label="Main content shows" value={secs(sp.lcpMs)} tone={lcpTone(sp.lcpMs)} />
+              <Stat label="First paint" value={secs(sp.fcpMs)} />
+              <Stat
+                label="Real visitors (LCP)"
+                value={sp.fieldLcpMs === null ? "—" : secs(sp.fieldLcpMs)}
+                tone={lcpTone(sp.fieldLcpMs)}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-muted">
+              Google test on a mid-range phone · checked {fmtDate(sp.checkedAt)}. Main content should show
+              within 2.5s; past 4s many people leave.{" "}
+              <a
+                href={`https://pagespeed.web.dev/analysis?url=${encodeURIComponent(landing.url ?? "")}&form_factor=mobile`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand hover:underline"
+              >
+                Full report ↗
+              </a>
+            </p>
+          </>
+        )}
+        {err && <p className="mt-1 text-[11px] text-red">{err}</p>}
+      </div>
+    </section>
+  );
+}
+
+function Stat({ label, value, tone = "none" }: { label: string; value: string; tone?: Tone }) {
+  return (
+    <div className="rounded-[var(--radius-control)] border border-line bg-surface p-3">
+      <div className="text-[10px] uppercase tracking-wide text-muted">{label}</div>
+      <div className={`font-mono text-sm font-semibold ${tone === "none" ? "text-ink" : TONE_TEXT[tone]}`}>
+        {value}
+      </div>
+    </div>
   );
 }

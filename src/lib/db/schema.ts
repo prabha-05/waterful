@@ -361,6 +361,8 @@ export const adActivations = pgTable("ad_activations", {
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   // When it last stopped delivering, from Meta's activity log. Null while running.
   pausedAt: timestamp("paused_at", { withTimezone: true }),
+  // Where the ad sends people (from the ad creative), refreshed on every sync.
+  landingUrl: text("landing_url"),
 });
 
 // Daily grain. ADDITIVE metrics only get summed (§6 G1). reach is stored per day
@@ -381,6 +383,10 @@ export const adMetrics = pgTable(
       .notNull()
       .default(0),
     clicks: bigint("clicks", { mode: "number" }).notNull().default(0),
+    // `clicks` is Meta's clicks (all). These two are the landing funnel:
+    // taps headed to the site, and the ones the page actually loaded for.
+    linkClicks: bigint("link_clicks", { mode: "number" }).notNull().default(0),
+    landingPageViews: bigint("landing_page_views", { mode: "number" }).notNull().default(0),
     conversions: bigint("conversions", { mode: "number" })
       .notNull()
       .default(0),
@@ -506,3 +512,16 @@ export const syncRuns = pgTable("sync_runs", {
 
 // Note: concurrent-run guarding (rate-limit + lock; decisions §6) is enforced in the
 // worker/app layer, not via a schema constraint.
+
+// Mobile PageSpeed Insights per landing page (query string stripped).
+export const landingPageSpeed = pgTable("landing_page_speed", {
+  url: text("url").primaryKey(),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+  score: integer("score"),
+  fcpMs: integer("fcp_ms"),
+  lcpMs: integer("lcp_ms"),
+  tbtMs: integer("tbt_ms"),
+  cls: numeric("cls", { precision: 6, scale: 3 }),
+  fieldLcpMs: integer("field_lcp_ms"),
+  error: text("error"),
+});

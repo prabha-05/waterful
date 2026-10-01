@@ -107,6 +107,8 @@ export function fetchMetaData(
       impressions,
       reach,
       clicks,
+      linkClicks: Math.round(clicks * between(rng, 0.7, 0.88)),
+      landingPageViews: Math.round(clicks * between(rng, 0.45, 0.75)),
       conversions,
       thumbstop: opts.isVideo ? +between(rng, 0.18, 0.52).toFixed(4) : null,
       hold: opts.isVideo ? +between(rng, 0.04, 0.22).toFixed(4) : null,
@@ -148,6 +150,7 @@ export function fetchMetaData(
     budgetType: rng() < 0.5 ? "CBO" : "Ad set budget",
     dailyBudget: Math.round(baseSpend / 100) * 100,
     optimization: pick(rng, OPTIMIZATIONS),
+    landingUrl: "https://waterful.in/collections/all-products",
   };
 
   return {

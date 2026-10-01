@@ -22,6 +22,7 @@ import {
 } from "@/lib/db/schema";
 import { fetchMetaData } from "@/lib/meta";
 import { refreshShopifyRevenue } from "@/lib/shopify/sync";
+import { refreshLandingSpeeds } from "@/lib/pagespeed";
 
 export type SyncKind = "auto" | "manual" | "rebuild";
 export type SyncWindow = "28d" | "full";
@@ -126,7 +127,9 @@ export async function runMetaSync(
     } catch (e) {
       shopify = `shopify threw: ${(e as Error).message}`;
     }
-    console.log(`[sync] ${count} ads · ${shopify}`);
+    // Landing page speed rides along too, and like Shopify can't fail the sync.
+    const speed = await refreshLandingSpeeds();
+    console.log(`[sync] ${count} ads · ${shopify} · ${speed}`);
 
     await db
       .update(syncRuns)
@@ -165,6 +168,8 @@ async function syncOneAd(
           revenue: String(d.revenue),
           impressions: d.impressions,
           clicks: d.clicks,
+          linkClicks: d.linkClicks,
+          landingPageViews: d.landingPageViews,
           conversions: d.conversions,
           reach: d.reach,
           thumbstop: d.thumbstop === null ? null : String(d.thumbstop),
@@ -178,6 +183,8 @@ async function syncOneAd(
           revenue: sql`excluded.revenue`,
           impressions: sql`excluded.impressions`,
           clicks: sql`excluded.clicks`,
+          linkClicks: sql`excluded.link_clicks`,
+          landingPageViews: sql`excluded.landing_page_views`,
           conversions: sql`excluded.conversions`,
           reach: sql`excluded.reach`,
           thumbstop: sql`excluded.thumbstop`,
@@ -254,6 +261,8 @@ async function syncOneAd(
       // paused. The log is read in full, so a null here means Meta genuinely
       // has no pause event for it rather than the window being too short.
       pausedAt: stopped ? pauses.resolve(ad) : null,
+      // Only overwrite when Meta told us; a missing creative read keeps the last known page.
+      ...(pull.activation.landingUrl ? { landingUrl: pull.activation.landingUrl } : {}),
     })
     .where(eq(adActivations.metaAdId, ad.adId));
 }
